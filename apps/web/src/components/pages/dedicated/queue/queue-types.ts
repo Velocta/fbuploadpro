@@ -31,19 +31,17 @@ export interface DedicatedQueueItem {
 
 export interface PageTabQueueProps {
   page: FacebookPageItem;
-  queueItems: DedicatedQueueItem[];
   isLoading?: boolean;
-  onPublishNow: (itemId: string) => Promise<void>;
-  onUpdateItem: (itemId: string, data: { caption?: string; firstComment?: string | null }) => Promise<void>;
-  onDeleteItem: (itemId: string) => Promise<void>;
   onOpenAddQueue: () => void;
   /**
-   * Optional backstop called after every successful queue mutation
-   * (reorder, reschedule, edit, delete, retry, bulk add) so the page route
-   * can refresh its own queue data — keeping the dashboard/calendar tabs
-   * in sync without a full page reload.
+   * PROPS BRIDGE DELETED (spec 131 PR-131-3, PR-134-1's named deleter
+   * duty): the panel previously received `queueItems` + `onMutated` +
+   * item callbacks from the section route and seeded its cache from
+   * them. The panel now reads `queryKeys.queue.items` directly and its
+   * mutations invalidate the shared keys — the frame's Queue count and
+   * dashboard tab read the same cache entry, so they stay in sync
+   * without any prop drilling from the route.
    */
-  onMutated?: () => void;
 }
 
 /** Content-tab status filter. "Queued" = slot-based, "Scheduled" = custom time. */

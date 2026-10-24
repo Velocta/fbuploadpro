@@ -1,28 +1,50 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+/**
+ * Dedicated Page insights tab (spec 131 PR-131-3) — clean-room rebuild
+ * on shared/ui primitives + tokens and the spec 137 data layer.
+ * Legacy file was read for behavioural facts and copy only.
+ *
+ * Storage duty (§8.6): the 15-minute localStorage insights cache is
+ * DELETED (server-owned data never lives in localStorage, spec 137
+ * §3.9) — `getCachedInsights` / `setCachedInsights` /
+ * `INSIGHTS_CACHE_TTL_MS` are gone with it, and the localstorage
+ * baseline row for this file is removed in this PR. Freshness is
+ * preserved through React Query: the insights entry carries a 5-minute
+ * `staleTime` (spec 137 §3.2.2) and the explicit Sync action refetches
+ * with the route's `refresh=true` flag, as before.
+ *
+ * Bundle duty (§8.5): `recharts` sits behind `next/dynamic` in
+ * `./tab-insights-chart` — it is not in this tab's initial chunk.
+ * Types: the response is the zod-inferred `PageInsightsResponse` from
+ * the typed client's schema — the file's `any` is 0.
+ */
+
+import * as React from 'react';
+import dynamic from 'next/dynamic';
+import { RefreshCwIcon } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+
+import { api, buildTenantApiPath } from '@/lib/api';
 import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
-import {
-  THEME,
-  PALETTE,
-  RADII,
-  SPACING,
-  TYPOGRAPHY,
-} from '@/lib/theme';
+  PageInsightsResponseSchema,
+  type PageInsightsRange,
+  type PageInsightsResponse,
+} from '@/lib/api/schemas/pages';
+import { queryKeys } from '@/lib/data/query-keys';
+import { Banner } from '@/components/shared/ui/banner';
+import { Button } from '@/components/shared/ui/button';
+import { EmptyState } from '@/components/shared/ui/empty-state';
+import { Skeleton } from '@/components/shared/ui/skeleton';
+import { cn } from '@/lib/utils';
 import type { FacebookPageItem } from '../page-card';
-import type { PageInsightsResponse, PageInsightsRange } from '@fbuploadpro/contracts';
 
-export const INSIGHTS_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const InsightsChart = dynamic(
+  () => import('./tab-insights-chart').then((m) => m.InsightsChart),
+  { ssr: false }
+);
 
-const INSIGHTS_FETCH_TIMEOUT_MS = 20 * 1000; // Skeleton must never hang past this
+export type { PageInsightsRange };
 
 function formatUpdatedAgo(cachedAt: string): string {
   const then = Date.parse(cachedAt);
@@ -45,200 +67,86 @@ function hasMeaningfulInsights(data: PageInsightsResponse): boolean {
   );
 }
 
-export interface StoredInsightsCacheEntry {
-  data: PageInsightsResponse;
-  cachedAt: number;
-  expiresAt: number;
-}
-
-function getLocalStorage(): Storage | null {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    return window.localStorage;
-  }
-  if (typeof localStorage !== 'undefined') {
-    return localStorage;
-  }
-  return null;
-}
-
-export function getCachedInsights(pageId: string, range: PageInsightsRange): PageInsightsResponse | null {
-  const storage = getLocalStorage();
-  if (!storage) return null;
-  try {
-    const raw = storage.getItem(`insights:${pageId}:${range}`);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as StoredInsightsCacheEntry;
-    if (!parsed || typeof parsed !== 'object' || !parsed.data || !parsed.expiresAt) {
-      storage.removeItem(`insights:${pageId}:${range}`);
-      return null;
-    }
-    if (Date.now() >= parsed.expiresAt) {
-      return null;
-    }
-    return parsed.data;
-  } catch {
-    try {
-      storage.removeItem(`insights:${pageId}:${range}`);
-    } catch {
-      // Ignore removal failure in restricted environments
-    }
-    return null;
-  }
-}
-
-export function setCachedInsights(pageId: string, range: PageInsightsRange, data: PageInsightsResponse): void {
-  const storage = getLocalStorage();
-  if (!storage) return;
-  try {
-    const entry: StoredInsightsCacheEntry = {
-      data,
-      cachedAt: Date.now(),
-      expiresAt: Date.now() + INSIGHTS_CACHE_TTL_MS,
-    };
-    storage.setItem(`insights:${pageId}:${range}`, JSON.stringify(entry));
-  } catch {
-    // Graceful fallback for quota restrictions or private browsing
-  }
-}
-
 export interface PageTabInsightsProps {
   page: FacebookPageItem;
   subdomain: string;
+}
+
+const cardClass = 'rounded-md border border-line bg-panel p-6';
+const kpiLabelClass = 'text-body text-ink-sub';
+const kpiValueClass = 'mt-1 text-xxl font-bold tabular-nums text-ink';
+
+function BreakdownBar({
+  pct,
+  fillClass,
+}: Readonly<{ pct: number; fillClass: string }>) {
+  return (
+    <svg
+      aria-hidden
+      className="h-1 w-full border-b border-line"
+      viewBox="0 0 100 3"
+      preserveAspectRatio="none"
+    >
+      <rect x="0" y="0" width={Math.max(0, Math.min(100, pct))} height="3" className={fillClass} />
+    </svg>
+  );
 }
 
 export function PageTabInsights({
   page,
   subdomain,
 }: Readonly<PageTabInsightsProps>) {
-  const [range, setRange] = useState<PageInsightsRange>('28d');
-  const [data, setData] = useState<PageInsightsResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isMounted, setIsMounted] = useState(false);
+  const [range, setRange] = React.useState<PageInsightsRange>('28d');
+  const refreshRef = React.useRef(false);
 
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+  const insightsPath = buildTenantApiPath(subdomain, `/pages/${page.id}/insights`);
+  const tenant = queryKeys.tenant(subdomain);
 
-  const fetchInsights = async (rangeValue: PageInsightsRange, forceRefresh = false) => {
-    if (!page.id || !subdomain) return;
-    setError(null);
+  const insightsQuery = useQuery({
+    queryKey: tenant.insights.page(page.id, range),
+    queryFn: ({ signal }) => {
+      const forceRefresh = refreshRef.current;
+      refreshRef.current = false;
+      return api.get(insightsPath, {
+        schema: PageInsightsResponseSchema,
+        query: forceRefresh ? { range, refresh: 'true' } : { range },
+        signal,
+      });
+    },
+    enabled: Boolean(page.id && subdomain),
+    staleTime: 5 * 60 * 1000,
+  });
 
-    // 1. Check client-side 15-minute localStorage cache if not a manual forced sync
-    if (!forceRefresh) {
-      const cached = getCachedInsights(page.id, rangeValue);
-      if (cached) {
-        setData(cached);
-        setIsLoading(false);
-        return;
-      }
-    }
+  const data = insightsQuery.data ?? null;
+  const isLoading = insightsQuery.isPending && !data;
+  const isRefreshing = insightsQuery.isFetching && Boolean(data);
+  const error = insightsQuery.isError
+    ? insightsQuery.error instanceof Error
+      ? insightsQuery.error.message
+      : "Couldn't load page insights. Please try again."
+    : null;
 
-    if (forceRefresh) {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
-    }
-
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), INSIGHTS_FETCH_TIMEOUT_MS);
-
-    try {
-      const url = `/api/tenant/${subdomain}/pages/${page.id}/insights?range=${rangeValue}${
-        forceRefresh ? '&refresh=true' : ''
-      }`;
-      const res = await fetch(url, { signal: controller.signal });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || errorData.message || "Couldn't load page insights. Please try again.");
-      }
-      const responseJson: PageInsightsResponse = await res.json();
-      setData(responseJson);
-      // Persist in localStorage with 15-minute expiration
-      setCachedInsights(page.id, rangeValue, responseJson);
-    } catch (err: any) {
-      if (err?.name === 'AbortError') {
-        setError('Insights took too long to load. Please try again.');
-      } else {
-        setError(err.message || "Couldn't load page insights. Please try again.");
-      }
-    } finally {
-      window.clearTimeout(timeoutId);
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    if (page.id && subdomain) {
-      void fetchInsights(range, false);
-    }
-  }, [page.id, subdomain, range]);
-
-  const handleRangeChange = (newRange: PageInsightsRange) => {
-    setRange(newRange);
-  };
-
-  const handleManualRefresh = () => {
-    void fetchInsights(range, true);
-  };
-
-  const formatChartDate = (dateStr: string) => {
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    } catch {
-      return dateStr;
-    }
-  };
+  const handleManualRefresh = React.useCallback(() => {
+    refreshRef.current = true;
+    void insightsQuery.refetch();
+  }, [insightsQuery]);
 
   return (
-    <div data-testid="page-tab-insights" style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xl }}>
-      {/* Top Controls: Range Switcher & Refresh */}
+    <div data-testid="page-tab-insights" className="flex flex-col gap-6">
+      {/* Controls: range switcher + refresh */}
       <div
         data-testid="insights-controls-bar"
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: SPACING.md,
-        }}
+        className="flex flex-wrap items-center justify-between gap-4"
       >
         <div>
-          <h3
-            style={{
-              margin: 0,
-              fontSize: '1.125rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-            }}
-          >
-            Page Performance & Insights
-          </h3>
-          <p
-            data-testid="insights-updated-line"
-            style={{
-              margin: `${SPACING.xs} 0 0 0`,
-              fontSize: '0.875rem',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            }}
-          >
+          <h3 className="m-0 text-lg font-semibold text-ink">Page Performance & Insights</h3>
+          <p data-testid="insights-updated-line" className="mt-1 text-body text-ink-sub">
             {data ? formatUpdatedAgo(data.cachedAt) : 'from Facebook'}
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
-          {/* Range Buttons */}
-          <div
-            style={{
-              display: 'flex',
-              backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
-              padding: '2px',
-              borderRadius: RADII.sm,
-            }}
-          >
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-sm bg-active p-0.5" role="group" aria-label="Insights range">
             {(['7d', '14d', '28d', '90d'] as const).map((r) => {
               const isSelected = range === r;
               return (
@@ -246,22 +154,14 @@ export function PageTabInsights({
                   key={r}
                   type="button"
                   data-testid={`range-btn-${r}`}
-                  onClick={() => handleRangeChange(r)}
-                  style={{
-                    padding: `${SPACING.xs} ${SPACING.sm}`,
-                    borderRadius: RADII.xs,
-                    fontSize: '0.75rem',
-                    fontWeight: isSelected ? TYPOGRAPHY.weights.bold : TYPOGRAPHY.weights.medium,
-                    backgroundColor: isSelected
-                      ? `var(--bg-panel, ${THEME.default.surfaces.panel})`
-                      : 'transparent',
-                    color: isSelected
-                      ? `var(--text-main, ${THEME.default.text.primary})`
-                      : `var(--text-sub, ${THEME.default.text.secondary})`,
-                    border: 'none',
-                    cursor: 'pointer',
-                    boxShadow: isSelected ? `var(--shadow-card, ${THEME.default.shadows.card})` : 'none',
-                  }}
+                  aria-pressed={isSelected}
+                  onClick={() => setRange(r)}
+                  className={cn(
+                    'min-h-11 rounded-xs px-3 text-xs cursor-pointer',
+                    isSelected
+                      ? 'bg-panel font-bold text-ink shadow-card'
+                      : 'font-medium text-ink-sub'
+                  )}
                 >
                   {r.toUpperCase()}
                 </button>
@@ -269,372 +169,104 @@ export function PageTabInsights({
             })}
           </div>
 
-          {/* Refresh Button — always clickable, spinner while syncing */}
-          <button
+          <Button
             type="button"
+            variant="outline"
             data-testid="refresh-insights-btn"
             aria-label="Sync insights"
             onClick={handleManualRefresh}
-            style={{
-              padding: `${SPACING.xs} ${SPACING.sm}`,
-              borderRadius: RADII.sm,
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.medium,
-              backgroundColor: 'transparent',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: SPACING.xs,
-              opacity: isRefreshing ? 0.7 : 1,
-            }}
+            disabled={isRefreshing}
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              style={{
-                animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
-              }}
-            >
-              <polyline points="23 4 23 10 17 10" />
-              <polyline points="1 20 1 14 7 14" />
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-            </svg>
+            <RefreshCwIcon aria-hidden className={cn(isRefreshing && 'animate-spin')} />
             {isRefreshing ? 'Syncing...' : 'Sync'}
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* Error Banner */}
+      {/* Error banner */}
       {error && (
-        <div
-          data-testid="insights-error-banner"
-          style={{
-            padding: SPACING.md,
-            borderRadius: RADII.md,
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            color: PALETTE.accent3,
-            fontSize: '0.875rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <span>{error}</span>
-          <button
-            type="button"
-            onClick={handleManualRefresh}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: PALETTE.accent3,
-              textDecoration: 'underline',
-              cursor: 'pointer',
-              fontSize: '0.8125rem',
-            }}
-          >
-            Retry
-          </button>
+        <div className="overflow-hidden rounded-md border border-line">
+          <Banner
+            variant="critical"
+            data-testid="insights-error-banner"
+            title={error}
+            action={
+              <Button type="button" variant="outline" onClick={handleManualRefresh}>
+                Retry
+              </Button>
+            }
+          />
         </div>
       )}
 
-      {/* Structured Loading Skeleton */}
-      {isLoading && !data && (
-        <div data-testid="insights-loading" style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: SPACING.md,
-            }}
-          >
+      {/* Loading skeleton at final geometry */}
+      {isLoading && (
+        <div data-testid="insights-loading" aria-busy="true" className="flex flex-col gap-6">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
             {[1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                style={{
-                  padding: SPACING.lg,
-                  backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                  borderRadius: RADII.md,
-                  height: '92px',
-                  opacity: 0.6,
-                }}
-              />
+              <Skeleton key={i} className="h-24 w-full" />
             ))}
           </div>
-          <div
-            style={{
-              padding: SPACING.lg,
-              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.md,
-              height: '320px',
-              opacity: 0.6,
-            }}
-          />
+          <Skeleton className="h-80 w-full" />
         </div>
       )}
 
       {/* Empty state: no insights data yet */}
       {!isLoading && !error && (!data || !hasMeaningfulInsights(data)) && (
-        <div
+        <EmptyState
+          type="first-use"
           data-testid="insights-empty-state"
-          style={{
-            padding: SPACING.xxl,
-            textAlign: 'center',
-            fontSize: '0.875rem',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          }}
-        >
-          Insights will appear here after your first posts publish.
-        </div>
+          title="Insights will appear here after your first posts publish."
+        />
       )}
 
-      {/* Main Insights Content */}
+      {/* Main insights content */}
       {data && hasMeaningfulInsights(data) && (
         <>
-          {/* Key KPI Overview Cards */}
           <div
             data-testid="insights-kpi-grid"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: SPACING.md,
-            }}
+            className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4"
           >
-            <div
-              style={{
-                padding: SPACING.lg,
-                backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.md,
-              }}
-            >
-              <span style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
-                Total Followers
-              </span>
-              <div
-                style={{
-                  fontSize: '1.5rem',
-                  fontWeight: TYPOGRAPHY.weights.bold,
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  marginTop: SPACING.xs,
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {data.overview.followersCount.toLocaleString()}
-              </div>
+            <div className={cardClass}>
+              <span className={kpiLabelClass}>Total Followers</span>
+              <div className={kpiValueClass}>{data.overview.followersCount.toLocaleString()}</div>
             </div>
-
-            <div
-              style={{
-                padding: SPACING.lg,
-                backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.md,
-              }}
-            >
-              <span style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
-                Total Video Views
-              </span>
-              <div
-                style={{
-                  fontSize: '1.5rem',
-                  fontWeight: TYPOGRAPHY.weights.bold,
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  marginTop: SPACING.xs,
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {data.overview.totalVideoViews.toLocaleString()}
-              </div>
+            <div className={cardClass}>
+              <span className={kpiLabelClass}>Total Video Views</span>
+              <div className={kpiValueClass}>{data.overview.totalVideoViews.toLocaleString()}</div>
             </div>
-
-            <div
-              style={{
-                padding: SPACING.lg,
-                backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.md,
-              }}
-            >
-              <span style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
-                Post Engagements
-              </span>
-              <div
-                style={{
-                  fontSize: '1.5rem',
-                  fontWeight: TYPOGRAPHY.weights.bold,
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  marginTop: SPACING.xs,
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {data.overview.totalPostEngagements.toLocaleString()}
-              </div>
+            <div className={cardClass}>
+              <span className={kpiLabelClass}>Post Engagements</span>
+              <div className={kpiValueClass}>{data.overview.totalPostEngagements.toLocaleString()}</div>
             </div>
-
-            <div
-              style={{
-                padding: SPACING.lg,
-                backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.md,
-              }}
-            >
-              <span style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
-                Total Reactions
-              </span>
-              <div
-                style={{
-                  fontSize: '1.5rem',
-                  fontWeight: TYPOGRAPHY.weights.bold,
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  marginTop: SPACING.xs,
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {data.reactions.total.toLocaleString()}
-              </div>
+            <div className={cardClass}>
+              <span className={kpiLabelClass}>Total Reactions</span>
+              <div className={kpiValueClass}>{data.reactions.total.toLocaleString()}</div>
             </div>
           </div>
 
-          {/* Time Series Growth Chart */}
-          <div
-            data-testid="insights-chart-card"
-            style={{
-              padding: SPACING.lg,
-              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.md,
-            }}
-          >
-            <div style={{ marginBottom: SPACING.lg }}>
-              <h4
-                style={{
-                  margin: 0,
-                  fontSize: '0.9375rem',
-                  fontWeight: TYPOGRAPHY.weights.semibold,
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                }}
-              >
-                Follower & View Trajectory
-              </h4>
-              <p
-                style={{
-                  margin: `${SPACING.xs} 0 0 0`,
-                  fontSize: '0.8125rem',
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                }}
-              >
+          <div data-testid="insights-chart-card" className={cardClass}>
+            <div className="mb-6">
+              <h4 className="m-0 text-body font-semibold text-ink">Follower & View Trajectory</h4>
+              <p className="mt-1 text-body text-ink-sub">
                 Daily follower activity and content impressions over the selected window.
               </p>
             </div>
 
-            {isMounted && data.timeSeries.length > 0 ? (
-              <div style={{ width: '100%', height: 260 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={data.timeSeries} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="amberGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={PALETTE.primary} stopOpacity={0.4} />
-                        <stop offset="95%" stopColor={PALETTE.primary} stopOpacity={0.0} />
-                      </linearGradient>
-                      <linearGradient id="viewsGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={PALETTE.accent4} stopOpacity={0.3} />
-                        <stop offset="95%" stopColor={PALETTE.accent4} stopOpacity={0.0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke={`var(--border-subtle, ${THEME.default.borders.hairline})`} />
-                    <XAxis
-                      dataKey="date"
-                      tickFormatter={formatChartDate}
-                      stroke={`var(--text-sub, ${THEME.default.text.secondary})`}
-                      fontSize={11}
-                      tickLine={false}
-                    />
-                    <YAxis stroke={`var(--text-sub, ${THEME.default.text.secondary})`} fontSize={11} tickLine={false} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                        borderColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
-                        borderRadius: RADII.sm,
-                        color: `var(--text-main, ${THEME.default.text.primary})`,
-                        fontSize: '0.8125rem',
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="pageFollows"
-                      name="Followers"
-                      stroke={PALETTE.primary}
-                      strokeWidth={2}
-                      fillOpacity={1}
-                      fill="url(#amberGradient)"
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="mediaViews"
-                      name="Impressions & Views"
-                      stroke={PALETTE.accent4}
-                      strokeWidth={2}
-                      fillOpacity={1}
-                      fill="url(#viewsGradient)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
+            {data.timeSeries.length > 0 ? (
+              <InsightsChart timeSeries={data.timeSeries} />
             ) : (
-              <div
-                style={{
-                  padding: SPACING.xl,
-                  textAlign: 'center',
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                  fontSize: '0.8125rem',
-                }}
-              >
+              <p className="px-6 py-6 text-center text-body text-ink-sub">
                 No time-series data available for this range.
-              </div>
+              </p>
             )}
           </div>
 
-          {/* Reactions & Demographics Row */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-              gap: SPACING.md,
-            }}
-          >
-            {/* Reactions Breakdown */}
-            <div
-              data-testid="reactions-breakdown-card"
-              style={{
-                padding: SPACING.lg,
-                backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.md,
-              }}
-            >
-              <h4
-                style={{
-                  margin: 0,
-                  fontSize: '0.9375rem',
-                  fontWeight: TYPOGRAPHY.weights.semibold,
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  marginBottom: SPACING.md,
-                }}
-              >
-                Engagement Reactions
-              </h4>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-4">
+            <div data-testid="reactions-breakdown-card" className={cardClass}>
+              <h4 className="m-0 mb-4 text-body font-semibold text-ink">Engagement Reactions</h4>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
+              <div className="flex flex-col gap-2">
                 {[
                   { label: 'Like', count: data.reactions.like },
                   { label: 'Love', count: data.reactions.love },
@@ -649,114 +281,38 @@ export function PageTabInsights({
                       : 0;
 
                   return (
-                    <div key={reaction.label} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          fontSize: '0.8125rem',
-                          color: `var(--text-main, ${THEME.default.text.primary})`,
-                        }}
-                      >
+                    <div key={reaction.label} className="flex flex-col gap-1">
+                      <div className="flex justify-between text-body text-ink">
                         <span>{reaction.label}</span>
-                        <span style={{ color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
+                        <span className="text-ink-sub">
                           {reaction.count.toLocaleString()} ({pct}%)
                         </span>
                       </div>
-                      <div
-                        style={{
-                          width: '100%',
-                          height: '3px',
-                          backgroundColor: 'transparent',
-                          borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                          borderRadius: RADII.xs,
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${pct}%`,
-                            height: '100%',
-                            backgroundColor: PALETTE.primary,
-                            borderRadius: RADII.xs,
-                          }}
-                        />
-                      </div>
+                      <BreakdownBar pct={pct} fillClass="fill-brand-gold" />
                     </div>
                   );
                 })}
               </div>
             </div>
 
-            {/* Demographics / Audience Locations */}
-            <div
-              data-testid="demographics-card"
-              style={{
-                padding: SPACING.lg,
-                backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.md,
-              }}
-            >
-              <h4
-                style={{
-                  margin: 0,
-                  fontSize: '0.9375rem',
-                  fontWeight: TYPOGRAPHY.weights.semibold,
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  marginBottom: SPACING.md,
-                }}
-              >
-                Top Audience Countries
-              </h4>
+            <div data-testid="demographics-card" className={cardClass}>
+              <h4 className="m-0 mb-4 text-body font-semibold text-ink">Top Audience Countries</h4>
 
               {data.demographics.topCountries.length === 0 ? (
-                <div
-                  style={{
-                    padding: SPACING.md,
-                    textAlign: 'center',
-                    color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                    fontSize: '0.8125rem',
-                  }}
-                >
+                <p className="px-4 py-4 text-center text-body text-ink-sub">
                   Demographic location data requires additional follower volume.
-                </div>
+                </p>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
+                <div className="flex flex-col gap-2">
                   {data.demographics.topCountries.slice(0, 5).map((geo) => (
-                    <div key={geo.name} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          fontSize: '0.8125rem',
-                          color: `var(--text-main, ${THEME.default.text.primary})`,
-                        }}
-                      >
+                    <div key={geo.name} className="flex flex-col gap-1">
+                      <div className="flex justify-between text-body text-ink">
                         <span>{geo.name}</span>
-                        <span style={{ color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
+                        <span className="text-ink-sub">
                           {geo.count.toLocaleString()} ({geo.percentage}%)
                         </span>
                       </div>
-                      <div
-                        style={{
-                          width: '100%',
-                          height: '3px',
-                          backgroundColor: 'transparent',
-                          borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                          borderRadius: RADII.xs,
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${geo.percentage}%`,
-                            height: '100%',
-                            backgroundColor: PALETTE.accent4,
-                            borderRadius: RADII.xs,
-                          }}
-                        />
-                      </div>
+                      <BreakdownBar pct={geo.percentage} fillClass="fill-signal-operational" />
                     </div>
                   ))}
                 </div>

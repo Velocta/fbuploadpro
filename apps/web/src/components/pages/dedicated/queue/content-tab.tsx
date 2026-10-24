@@ -19,13 +19,14 @@
  * no dual-read. Unified reading belongs to the Phase 7 web-enqueue
  * cutover, not this PR.
  *
- * PROPS BRIDGE (named, temporary): the section route still passes
- * `queueItems` + callbacks today. The panel seeds the query cache from
- * the prop on mount and keeps `onMutated` firing (it also invalidates
- * the shared keys) until spec 131's route rebuild removes the
- * route-side fetching and the prop — 131 is the named deleter of this
- * bridge. The query cache is otherwise the only copy of queue data:
- * the legacy panel's `useState` item mirror is deleted.
+ * PROPS BRIDGE DELETED (spec 131 PR-131-3, this panel's named
+ * deleter duty from PR-134-1): the section route no longer fetches
+ * queue data and no longer passes the items prop or the mutation
+ * callback. The panel reads the shared React Query keys directly and
+ * its mutations invalidate those keys — the frame's Queue count and
+ * dashboard tab read the same cache entry and stay in sync. The query
+ * cache is the only copy of queue data: the legacy panel's `useState`
+ * item mirror stays deleted.
  *
  * Feedback: the hand-rolled queue-toasts stack is deleted; every
  * outcome goes through the single shared Toast system, with spec 112's
@@ -183,7 +184,7 @@ function toInitialPost(item: DedicatedQueueItem): ComposerInitialPost {
 }
 
 export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
-  const { page, queueItems, isLoading = false, onOpenAddQueue, onMutated } = props;
+  const { page, isLoading = false, onOpenAddQueue } = props;
   const params = useParams();
   const subdomain = (params.subdomain as string) || '';
   const pageId = page.id;
@@ -197,8 +198,10 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
   const accountsPath = buildTenantApiPath(subdomain, '/accounts');
 
   // --- queries ------------------------------------------------------------
-  // Props bridge: React Query's initialData seeds the cache from the
-  // route prop on mount (see the header note — 131 deletes the bridge).
+  // The panel reads the shared queue key directly (props bridge deleted
+  // by spec 131 PR-131-3 — see the header note). The route server-
+  // prefetches this same key, so first paint renders the prefetched
+  // state and the background refetch reconciles with the API.
   const itemsQuery = useQuery({
     queryKey: itemsKey,
     queryFn: ({ signal }) =>
@@ -208,15 +211,6 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
         signal,
       }),
     enabled: Boolean(subdomain),
-    // Always seed — including the empty array — so the panel renders the
-    // route's known state on first paint (the legacy panel rendered props
-    // immediately); the background refetch still reconciles with the API.
-    initialData: {
-      items: queueItems as unknown as QueueItem[],
-      total: queueItems.length,
-      limit: queueItems.length,
-      offset: 0,
-    },
   });
 
   const slotsQuery = useQuery({
@@ -227,9 +221,9 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
   });
 
   const items: DedicatedQueueItem[] = React.useMemo(() => {
-    const raw = itemsQuery.data?.items ?? queueItems;
+    const raw = itemsQuery.data?.items ?? [];
     return raw.map((item) => fromQueueItem(item as QueueItem));
-  }, [itemsQuery.data, queueItems]);
+  }, [itemsQuery.data]);
 
   const slots: PageSlotSummary[] = React.useMemo(
     () => (slotsQuery.data?.slots ?? []).map(toSlotSummary),
@@ -295,13 +289,12 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
   const invalidateQueue = React.useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: tenant.queue.all });
     void queryClient.invalidateQueries({ queryKey: itemsKey });
-    onMutated?.();
-  }, [queryClient, onMutated, itemsKey]);
+  }, [queryClient, itemsKey]);
 
   const setCachedItems = React.useCallback(
     (updater: (prev: DedicatedQueueItem[]) => DedicatedQueueItem[]) => {
       queryClient.setQueryData(itemsKey, (prev: unknown) => {
-        const prevItems = (prev as { items?: QueueItem[] } | undefined)?.items ?? queueItems;
+        const prevItems = (prev as { items?: QueueItem[] } | undefined)?.items ?? [];
         const next = updater(prevItems.map((i) => fromQueueItem(i as QueueItem)));
         return {
           items: next,
@@ -311,7 +304,7 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
         };
       });
     },
-    [queryClient, itemsKey, queueItems]
+    [queryClient, itemsKey]
   );
 
   // --- derived -------------------------------------------------------------
@@ -497,12 +490,11 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
           prev.some((c) => c.id === mapped.id) ? prev : [...prev, mapped]
         );
         toast.success('Post restored.');
-        onMutated?.();
       } catch {
         toast.error("Couldn't restore this post.");
       }
     },
-    [queuePath, pageId, setCachedItems, onMutated]
+    [queuePath, pageId, setCachedItems]
   );
 
   const handleDelete = React.useCallback(
@@ -532,9 +524,8 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
         duration: UNDO_DURATION_MS,
         action: { label: 'Undo', onClick: () => void restoreDeletedItem(item) },
       });
-      onMutated?.();
     },
-    [subdomain, setCachedItems, restoreDeletedItem, onMutated]
+    [subdomain, setCachedItems, restoreDeletedItem]
   );
 
   const [bulkDeleting, setBulkDeleting] = React.useState(false);
@@ -567,8 +558,7 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
       toast.error(`Deleted ${deleted} of ${ids.length} posts.`);
       invalidateQueue();
     }
-    if (deleted > 0) onMutated?.();
-  }, [selection, subdomain, setCachedItems, invalidateQueue, onMutated]);
+  }, [selection, subdomain, setCachedItems, invalidateQueue]);
 
   // --- retry -------------------------------------------------------------------
   const handleRetry = React.useCallback(
@@ -591,9 +581,8 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
         return;
       }
       toast.success(`Retrying ${formatSlotShort(retryTime, timeZone)}.`);
-      onMutated?.();
     },
-    [connectionExpired, slots, timeZone, applyPatch, onMutated]
+    [connectionExpired, slots, timeZone, applyPatch]
   );
 
   // --- selection + checklist -----------------------------------------------------
@@ -842,7 +831,7 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
           onClose={() => setRescheduleItem(null)}
           onSaved={(message) => {
             toast.success(message);
-            onMutated?.();
+            invalidateQueue();
           }}
           onError={(message) => toast.error(message)}
         />
