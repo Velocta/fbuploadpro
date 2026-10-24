@@ -28,7 +28,7 @@ import {
  *
  * T23 data-path finding (recorded in the PR): a web-composed post now
  * lands in unified `queue_items` (composer create → destination
- * enqueue, #750/#756/#759) and the worker publishes only from unified
+ * enqueue, PRs 750/756/759) and the worker publishes only from unified
  * `queue_items`. During the cutover the legacy Facebook Page section
  * still reads `legacy_queue_items`, so posts composed on the web no
  * longer appear there — they appear here. Pre-cutover legacy items

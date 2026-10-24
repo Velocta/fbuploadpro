@@ -50,7 +50,7 @@
       "/tenant/[subdomain]/connect/[platform]": {
         "firstLoadGzipBytes": 160057,
         "firstLoadRawBytes": 531438,
-        "routeSpecificGzipBytes": 26209,
+        "routeSpecificGzipBytes": 27670,
         "routeSpecificRawBytes": 80486
       },
       "/tenant/[subdomain]/instagram/accounts": {
@@ -249,7 +249,7 @@
       "/tenant/[subdomain]/connect/[platform]": {
         "firstLoadGzipBytes": 168060,
         "firstLoadRawBytes": 558010,
-        "routeSpecificGzipBytes": 27520,
+        "routeSpecificGzipBytes": 29054,
         "routeSpecificRawBytes": 84511
       },
       "/tenant/[subdomain]/destinations/[destinationId]": {

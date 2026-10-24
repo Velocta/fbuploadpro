@@ -51,14 +51,17 @@ function toMetadata(
 ): Record<string, unknown> | null {
   if (!raw) return null;
   if (typeof raw === 'string') {
+    // jsonb arrives parsed from Supabase and as text from the SQL path;
+    // an unparseable text value is no metadata, not an error.
+    let parsed: unknown = null;
     try {
-      const parsed: unknown = JSON.parse(raw);
-      return parsed && typeof parsed === 'object'
-        ? (parsed as Record<string, unknown>)
-        : null;
+      parsed = JSON.parse(raw);
     } catch {
-      return null;
+      parsed = null;
     }
+    return parsed && typeof parsed === 'object'
+      ? (parsed as Record<string, unknown>)
+      : null;
   }
   return raw;
 }

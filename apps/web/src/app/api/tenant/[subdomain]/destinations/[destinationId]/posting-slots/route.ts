@@ -78,7 +78,7 @@ const ALL_SLOT_KINDS = ['text', 'image', 'video', 'story', 'carousel'];
  * Creates one unified posting slot (spec 134 PR-134-3, T24 — the write
  * side of the read above, mirroring the legacy pages slots create).
  * `posting_slots` carries a UNIQUE(destination_id, time_of_day)
- * constraint (#753): a second slot at the same time is a 409 with the
+ * constraint (PR 753): a second slot at the same time is a 409 with the
  * plain-language reason, never a 500.
  */
 export async function handleCreateDestinationPostingSlot(

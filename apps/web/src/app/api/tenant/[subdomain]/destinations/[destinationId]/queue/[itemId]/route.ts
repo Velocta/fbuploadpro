@@ -23,7 +23,7 @@ import {
  * /api/tenant/[subdomain]/destinations/[destinationId]/queue/[itemId]
  *
  * The unified per-item actions (spec 134 PR-134-3, T24) — the actions
- * the composer-retarget (#759) recorded as its residual: #756 shipped
+ * the composer retarget (PR 759) recorded as its residual: PR 756 shipped
  * the unified enqueue but no unified update, so the composer EDIT
  * flow's save stayed on the legacy route. This route is that update,
  * on the unified row.

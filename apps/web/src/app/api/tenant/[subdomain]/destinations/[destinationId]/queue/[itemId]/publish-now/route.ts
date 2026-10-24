@@ -12,7 +12,7 @@ import {
  * POST /api/tenant/[subdomain]/destinations/[destinationId]/queue/[itemId]/publish-now
  *
  * The unified publish-now (spec 134 PR-134-3, T24) — the second half
- * of the composer-retarget residual (#759): the composer EDIT flow's
+ * of the composer-retarget residual (PR 759): the composer EDIT flow's
  * Post now intent settles through here for unified items. Mirrors the
  * legacy publish-now exactly: a published item is a 400
  * (`ALREADY_PUBLISHED`); anything else is re-timed to now and
