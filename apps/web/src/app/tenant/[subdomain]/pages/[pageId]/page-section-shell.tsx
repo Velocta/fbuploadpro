@@ -534,7 +534,7 @@ export default function TenantDedicatedPageView({
             </TabsList>
 
             {visitedTabs.has('dashboard') && (
-              <TabsContent value="dashboard" forceMount>
+              <TabsContent value="dashboard" forceMount className="data-[state=inactive]:hidden">
                 <PageTabDashboard
                   page={page}
                   queueItems={dashboardQueueItems}
@@ -547,7 +547,7 @@ export default function TenantDedicatedPageView({
             )}
 
             {visitedTabs.has('queue') && (
-              <TabsContent value="queue" forceMount>
+              <TabsContent value="queue" forceMount className="data-[state=inactive]:hidden">
                 <PageTabQueue
                   page={page}
                   onOpenAddQueue={openComposer}
@@ -556,7 +556,7 @@ export default function TenantDedicatedPageView({
             )}
 
             {visitedTabs.has('calendar') && (
-              <TabsContent value="calendar" forceMount>
+              <TabsContent value="calendar" forceMount className="data-[state=inactive]:hidden">
                 <PageTabPostingTimes
                   page={page}
                   slots={slots}
@@ -571,13 +571,13 @@ export default function TenantDedicatedPageView({
             )}
 
             {visitedTabs.has('insights') && (
-              <TabsContent value="insights" forceMount>
+              <TabsContent value="insights" forceMount className="data-[state=inactive]:hidden">
                 <PageTabInsights page={page} subdomain={subdomain} />
               </TabsContent>
             )}
 
             {visitedTabs.has('settings') && (
-              <TabsContent value="settings" forceMount>
+              <TabsContent value="settings" forceMount className="data-[state=inactive]:hidden">
                 <PageTabSettings
                   page={page}
                   subdomain={subdomain}
