@@ -7,6 +7,7 @@ import {
   type InstagramPlatformOptions,
   type Platform,
   type PostFormat,
+  type ThreadsPlatformOptions,
 } from '@fbuploadpro/contracts';
 import { api, buildTenantApiPath } from '@/lib/api';
 import { ListSocialAccountsResponseSchema } from '@/lib/api/schemas/accounts';
@@ -308,6 +309,98 @@ export function buildInstagramEnqueueRequest(
 export async function submitInstagramEnqueue(
   subdomain: string,
   request: InstagramEnqueueRequest
+) {
+  return api.post(buildTenantApiPath(subdomain, DESTINATION_ENQUEUE_PATH), request, {
+    schema: DestinationEnqueueResponseSchema,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Threads (spec 132 PR-C4)
+// ---------------------------------------------------------------------------
+
+/** The Threads slice of the contracts enqueue request, spelled out
+ *  field-for-field like the slices above (same widening rationale; the
+ *  wire shape is server-validated). Threads has no first-comment
+ *  concept in spec 124, so the field is never sent. */
+export interface ThreadsEnqueueRequest {
+  platform: 'threads';
+  destinationId: string;
+  kind: DestinationEnqueueKind;
+  platformFormat?: string | null;
+  caption: string;
+  mediaItemIds: string[];
+  intent: DestinationEnqueueIntent;
+  scheduledAt?: string;
+  slotId?: string;
+  platformOptions?: ThreadsPlatformOptions;
+}
+
+export interface ThreadsEnqueueShape {
+  kind: 'text' | 'image' | 'video' | 'carousel';
+  /** The post text (the caption on media posts). */
+  text: string;
+  /** Selected media in post order. The unified row stores the first as
+   *  its primary media; a carousel's full list travels in
+   *  `platformOptions.carouselItems`, per the endpoint's contract. */
+  items: Array<Pick<ComposerMediaItem, 'id' | 'mediaType' | 'url'>>;
+  /** Per-item carousel alt text, by media item id. */
+  carouselAltTexts: Record<string, string>;
+  /** Platform options assembled + validated against
+   *  `ThreadsPlatformOptionsSchema` by the composer (carouselItems
+   *  excluded — the builder derives them from `items`). */
+  options: ThreadsPlatformOptions;
+  intent: ComposerIntent;
+  scheduleDate: Date | null;
+}
+
+/**
+ * Maps the Threads composer's kind/intent vocabulary onto the unified
+ * enqueue contract (pure — unit-tested without the network). The kind
+ * is the composer's derived kind verbatim (the worker publisher reads
+ * exactly these kinds); 'schedule' is the contract's 'scheduled', with
+ * `scheduledAt`; 'queue' carries no time and no slot pin
+ * (server-resolved).
+ */
+export function buildThreadsEnqueueRequest(
+  destinationId: string,
+  shape: ThreadsEnqueueShape
+): ThreadsEnqueueRequest {
+  const { kind, items, intent, scheduleDate } = shape;
+
+  const request: ThreadsEnqueueRequest = {
+    platform: 'threads',
+    destinationId,
+    kind,
+    platformFormat: null,
+    caption: shape.text,
+    mediaItemIds: items[0] ? [items[0].id] : [],
+    intent:
+      intent === 'schedule' ? 'scheduled' : intent === 'now' ? 'now' : 'queue',
+  };
+
+  if (intent === 'schedule' && scheduleDate) {
+    request.scheduledAt = scheduleDate.toISOString();
+  }
+  const options: ThreadsPlatformOptions = { ...shape.options };
+  if (kind === 'carousel') {
+    options.carouselItems = items.map((item) => {
+      const altText = shape.carouselAltTexts[item.id]?.trim();
+      return {
+        mediaUrl: item.url,
+        mediaType: item.mediaType,
+        ...(altText ? { altText } : {}),
+      };
+    });
+  }
+  if (Object.keys(options).length > 0) request.platformOptions = options;
+  return request;
+}
+
+/** Submits one Threads enqueue and validates the created-item body. */
+export async function submitThreadsEnqueue(
+  subdomain: string,
+  request: ThreadsEnqueueRequest
 ) {
   return api.post(buildTenantApiPath(subdomain, DESTINATION_ENQUEUE_PATH), request, {
     schema: DestinationEnqueueResponseSchema,

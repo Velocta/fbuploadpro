@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   buildFacebookEnqueueRequest,
   buildInstagramEnqueueRequest,
+  buildThreadsEnqueueRequest,
   resolveFacebookDestinationId,
 } from './destination-enqueue';
 
@@ -308,5 +309,76 @@ describe('buildInstagramEnqueueRequest — composer vocabulary → unified contr
       scheduleDate: null,
     });
     expect(request).not.toHaveProperty('platformOptions');
+  });
+});
+
+describe('buildThreadsEnqueueRequest — composer vocabulary → unified contract', () => {
+  const mediaItem = (id: string, mediaType: 'image' | 'video') => ({
+    id,
+    mediaType,
+    url: `https://cdn.example.com/${id}.jpg`,
+  });
+
+  it('maps a text post with no media and the reply control riding in options', () => {
+    const request = buildThreadsEnqueueRequest(DESTINATION_ID, {
+      kind: 'text',
+      text: 'Hello Threads',
+      items: [],
+      carouselAltTexts: {},
+      options: { replyControl: 'everyone', topicTag: 'Photography' },
+      intent: 'now',
+      scheduleDate: null,
+    });
+    expect(request).toMatchObject({
+      platform: 'threads',
+      destinationId: DESTINATION_ID,
+      kind: 'text',
+      caption: 'Hello Threads',
+      mediaItemIds: [],
+      intent: 'now',
+      platformOptions: { replyControl: 'everyone', topicTag: 'Photography' },
+    });
+    expect(request).not.toHaveProperty('firstComment');
+    expect(request).not.toHaveProperty('scheduledAt');
+  });
+
+  it('maps a single video with the primary media only', () => {
+    const request = buildThreadsEnqueueRequest(DESTINATION_ID, {
+      kind: 'video',
+      text: 'Watch this',
+      items: [mediaItem(MEDIA_ID, 'video')],
+      carouselAltTexts: {},
+      options: { replyControl: 'everyone', altText: 'A clip' },
+      intent: 'schedule',
+      scheduleDate: new Date('2026-12-01T09:00:00.000Z'),
+    });
+    expect(request.kind).toBe('video');
+    expect(request.mediaItemIds).toEqual([MEDIA_ID]);
+    expect(request.intent).toBe('scheduled');
+    expect(request.scheduledAt).toBe('2026-12-01T09:00:00.000Z');
+  });
+
+  it('maps a carousel with ordered items and per-item alt text', () => {
+    const second = '22222222-2222-4222-8222-222222222222';
+    const request = buildThreadsEnqueueRequest(DESTINATION_ID, {
+      kind: 'carousel',
+      text: 'Swipe',
+      items: [mediaItem(MEDIA_ID, 'image'), mediaItem(second, 'video')],
+      carouselAltTexts: { [MEDIA_ID]: ' First slide ' },
+      options: { replyControl: 'followers_only' },
+      intent: 'queue',
+      scheduleDate: null,
+    });
+    expect(request.kind).toBe('carousel');
+    expect(request.mediaItemIds).toEqual([MEDIA_ID]);
+    expect(request.intent).toBe('queue');
+    expect(request.platformOptions?.carouselItems).toEqual([
+      {
+        mediaUrl: `https://cdn.example.com/${MEDIA_ID}.jpg`,
+        mediaType: 'image',
+        altText: 'First slide',
+      },
+      { mediaUrl: `https://cdn.example.com/${second}.jpg`, mediaType: 'video' },
+    ]);
   });
 });
