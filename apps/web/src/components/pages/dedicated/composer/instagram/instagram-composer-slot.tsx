@@ -1,11 +1,23 @@
 'use client';
 
 import React from 'react';
+import dynamic from 'next/dynamic';
 import { DestinationComposerSlotShell } from '../destination/destination-slot-shell';
-import {
-  InstagramComposer,
-  type InstagramComposerDestination,
-} from './instagram-composer';
+import type { InstagramComposerDestination } from './instagram-composer';
+
+/**
+ * The composer itself is loaded on demand (spec 137 §3.6.1): the slot
+ * ships only the launch shell in the destination route's first load,
+ * and the composer framework (form, media area, contracts validators)
+ * arrives when the user actually opens it.
+ */
+const InstagramComposer = dynamic(
+  () =>
+    import('./instagram-composer').then((m) => ({
+      default: m.InstagramComposer,
+    })),
+  { ssr: false }
+);
 
 /**
  * Frame mount for the Instagram composer set (spec 132 PR-C3): the
