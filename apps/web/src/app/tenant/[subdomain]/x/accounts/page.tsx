@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useParams } from 'next/navigation';
-import { PlatformPlaceholderAccounts } from '@/components/workspace/platform-placeholder-accounts';
+import { PlatformAccountsShell } from '@/components/accounts/platform-accounts-shell';
 import { XTwitterIcon } from '@/components/workspace/platform-nav-config';
 
 export default function XTwitterAccountsPage() {
@@ -10,7 +10,7 @@ export default function XTwitterAccountsPage() {
   const subdomain = (params?.subdomain as string) || '';
 
   return (
-    <PlatformPlaceholderAccounts
+    <PlatformAccountsShell
       platformName="X (Twitter)"
       subdomain={subdomain}
       icon={<XTwitterIcon size={24} />}
