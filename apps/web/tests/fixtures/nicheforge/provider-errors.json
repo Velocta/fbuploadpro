@@ -1,0 +1,1 @@
+{"cases":[{"detail":"Rate limit hit.","kind":"rate-limited","name":"rate-limited"},{"detail":"Key rejected.","kind":"auth","name":"auth"},{"name":"malformed","output":"{this is not json"},{"name":"empty","output":"   "}]}
