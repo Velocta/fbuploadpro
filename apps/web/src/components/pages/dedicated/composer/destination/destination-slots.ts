@@ -81,14 +81,19 @@ export function getNextDestinationSlot(
 /**
  * Queue-intent line, e.g. "Goes out at the next posting time for Reels:
  * Tue 9:00 AM UTC." — the timezone is always labelled so the time is
- * never misread as local time (FB queue-slot-utils parity).
+ * never misread as local time (FB queue-slot-utils parity). A null
+ * label gives the labelless form ("Goes out at the next posting time:
+ * Tue 9:00 AM UTC.") for composers whose post kind needs no format
+ * naming (the X set, spec 132 §4.5).
  */
 export function destinationQueueGoesOutLine(
-  formatPluralLabel: string,
+  formatPluralLabel: string | null,
   occurrence: Date,
   timeZone: string
 ): string {
-  return `Goes out at the next posting time for ${formatPluralLabel}: ${formatSlotShort(occurrence, timeZone)} ${timeZone}.`;
+  return formatPluralLabel
+    ? `Goes out at the next posting time for ${formatPluralLabel}: ${formatSlotShort(occurrence, timeZone)} ${timeZone}.`
+    : `Goes out at the next posting time: ${formatSlotShort(occurrence, timeZone)} ${timeZone}.`;
 }
 
 export { formatSlotLong, formatSlotShort };

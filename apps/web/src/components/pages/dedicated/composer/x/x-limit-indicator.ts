@@ -12,6 +12,7 @@
  * of inventing a usage bar.
  */
 import { resolvePublishLimitWindow } from '@fbuploadpro/contracts';
+import { formatLimitWindowLabel } from '../destination/destination-limit';
 
 export interface XLimitIndicator {
   /** Posts allowed per window, from the contracts config. */
@@ -22,19 +23,6 @@ export interface XLimitIndicator {
   windowLabel: string;
   /** The line the composer renders. */
   message: string;
-}
-
-/** "900" -> "15 minutes"; "3600" -> "1 hour"; anything else in seconds. */
-export function formatLimitWindowLabel(windowSeconds: number): string {
-  if (windowSeconds % 3600 === 0) {
-    const hours = windowSeconds / 3600;
-    return hours === 1 ? '1 hour' : `${hours} hours`;
-  }
-  if (windowSeconds % 60 === 0) {
-    const minutes = windowSeconds / 60;
-    return minutes === 1 ? '1 minute' : `${minutes} minutes`;
-  }
-  return `${windowSeconds} seconds`;
 }
 
 export function getXLimitIndicator(): XLimitIndicator | null {

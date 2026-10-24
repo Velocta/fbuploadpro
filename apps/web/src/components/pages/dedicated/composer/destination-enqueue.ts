@@ -8,11 +8,14 @@ import {
   type Platform,
   type PostFormat,
   type ThreadsPlatformOptions,
+  type XPlatformOptions,
+  type XReplySettings,
 } from '@fbuploadpro/contracts';
 import { api, buildTenantApiPath } from '@/lib/api';
 import { ListSocialAccountsResponseSchema } from '@/lib/api/schemas/accounts';
 import type { ComposerIntent } from './intent-selector';
 import type { ComposerMediaItem } from './composer-media-area';
+import type { XMediaItem } from './x/x-media-area';
 
 /**
  * Unified destination enqueue — the client half of the spec 119/132
@@ -184,10 +187,10 @@ export function buildFacebookEnqueueRequest(
 
 /**
  * The wire shape every platform's enqueue request shares. Each platform
- * module spells its own slice field-for-field (the Facebook slice above;
- * the X slice in `./x/x-destination-enqueue.ts`) and submits through
- * this one transport — the server validates the full body against the
- * contracts union, so the shared submit only names the common fields.
+ * slice is spelled out field-for-field in this module (Facebook,
+ * Instagram, Threads and X below) and submits through this one
+ * transport — the server validates the full body against the contracts
+ * union, so the shared submit only names the common fields.
  */
 export type DestinationEnqueueWireRequest = {
   platform: Platform;
@@ -401,6 +404,105 @@ export function buildThreadsEnqueueRequest(
 export async function submitThreadsEnqueue(
   subdomain: string,
   request: ThreadsEnqueueRequest
+) {
+  return api.post(buildTenantApiPath(subdomain, DESTINATION_ENQUEUE_PATH), request, {
+    schema: DestinationEnqueueResponseSchema,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// X (spec 132 PR-C2)
+// ---------------------------------------------------------------------------
+
+/**
+ * The X slice of the contracts enqueue request, spelled out
+ * field-for-field like the slices above (same widening rationale; the
+ * wire shape is server-validated). The strict X options schema rejects
+ * anything outside poll / replySettings / quote / altText, so no
+ * thread-chain keys can ever be sent: chains are not authored in v1.
+ *
+ * Media rule: at most ONE attachment. The unified queue item carries a
+ * single primary media and the X publisher uploads exactly one file,
+ * so `mediaItemIds` holds zero or one id — the composer's media area
+ * blocks a second attachment rather than dropping one silently.
+ */
+export interface XEnqueueRequest {
+  platform: 'x';
+  destinationId: string;
+  kind: DestinationEnqueueKind;
+  platformFormat?: string | null;
+  caption: string;
+  title?: string | null;
+  firstComment?: string | null;
+  mediaItemIds: string[];
+  linkUrl?: string | null;
+  intent: DestinationEnqueueIntent;
+  scheduledAt?: string;
+  platformOptions?: XPlatformOptions;
+}
+
+export interface XEnqueueShape {
+  /** The post text (the enqueue `caption`). */
+  text: string;
+  /** The single attached media item, or null for a text post. */
+  item: XMediaItem | null;
+  intent: ComposerIntent;
+  /** Resolved schedule instant — required when intent is 'schedule'. */
+  scheduleDate: Date | null;
+  replySettings: XReplySettings;
+  /** The quoted post's id as typed; blank means no quote. */
+  quoteTweetId: string;
+  /** Alt text for the attached media; blank means none. */
+  altText: string;
+  /** The poll, when one is being authored (never with media). */
+  poll: { options: string[]; durationMinutes: number } | null;
+}
+
+/** The enqueue kind for the current shape: the media decides. */
+export function xPostKind(item: XMediaItem | null): DestinationEnqueueKind {
+  return item ? item.mediaType : 'text';
+}
+
+/**
+ * Assembles the request. `replySettings` is always sent (the control is
+ * explicit, with "everyone" as its default); quote and alt text ride
+ * only when present; the poll rides only when authored.
+ */
+export function buildXEnqueueRequest(destinationId: string, shape: XEnqueueShape): XEnqueueRequest {
+  const platformOptions: XPlatformOptions = { replySettings: shape.replySettings };
+  const quoteTweetId = shape.quoteTweetId.trim();
+  if (quoteTweetId) {
+    platformOptions.quoteTweetId = quoteTweetId;
+  }
+  if (shape.item && shape.altText.trim()) {
+    platformOptions.altText = shape.altText.trim();
+  }
+  if (shape.poll) {
+    platformOptions.poll = {
+      options: shape.poll.options.map((option) => option.trim()),
+      durationMinutes: shape.poll.durationMinutes,
+    };
+  }
+
+  const request: XEnqueueRequest = {
+    platform: 'x',
+    destinationId,
+    kind: xPostKind(shape.item),
+    caption: shape.text,
+    mediaItemIds: shape.item ? [shape.item.id] : [],
+    intent: shape.intent === 'schedule' ? 'scheduled' : shape.intent,
+    platformOptions,
+  };
+  if (shape.intent === 'schedule' && shape.scheduleDate) {
+    request.scheduledAt = shape.scheduleDate.toISOString();
+  }
+  return request;
+}
+
+/** Submits one X enqueue and validates the created-item body. */
+export async function submitXEnqueue(
+  subdomain: string,
+  request: XEnqueueRequest
 ) {
   return api.post(buildTenantApiPath(subdomain, DESTINATION_ENQUEUE_PATH), request, {
     schema: DestinationEnqueueResponseSchema,
