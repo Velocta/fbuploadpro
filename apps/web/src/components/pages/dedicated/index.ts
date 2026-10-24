@@ -23,6 +23,15 @@ export { ComposerCaption, type ComposerCaptionProps, CAPTION_CHAR_LIMIT } from '
 export { ComposerLink, type ComposerLinkProps, isValidLink } from './composer/composer-link';
 export { ComposerPreview, type ComposerPreviewProps } from './composer/composer-preview';
 export {
+  InstagramComposer,
+  type InstagramComposerProps,
+  type InstagramComposerDestination,
+} from './composer/instagram/instagram-composer';
+export {
+  InstagramComposerSlot,
+  type InstagramComposerSlotProps,
+} from './composer/instagram/instagram-composer-slot';
+export {
   PostingTimeQuickAdd,
   type PostingTimeQuickAddProps,
 } from './composer/posting-time-quick-add';

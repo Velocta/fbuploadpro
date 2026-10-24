@@ -44,8 +44,8 @@
       "/tenant/[subdomain]/settings": {
         "firstLoadGzipBytes": 162138,
         "firstLoadRawBytes": 538626,
-        "routeSpecificGzipBytes": 28290,
-        "routeSpecificRawBytes": 87674
+        "routeSpecificGzipBytes": 30670,
+        "routeSpecificRawBytes": 94442
       },
       "/tenant/[subdomain]/connect/[platform]": {
         "firstLoadGzipBytes": 160057,
@@ -86,7 +86,7 @@
       "/tenant/[subdomain]/media": {
         "firstLoadGzipBytes": 158619,
         "firstLoadRawBytes": 528145,
-        "routeSpecificGzipBytes": 24771,
+        "routeSpecificGzipBytes": 26052,
         "routeSpecificRawBytes": 77193
       },
       "/tenant/[subdomain]/x/accounts": {
@@ -279,7 +279,7 @@
       "/tenant/[subdomain]/media": {
         "firstLoadGzipBytes": 166550,
         "firstLoadRawBytes": 554553,
-        "routeSpecificGzipBytes": 26010,
+        "routeSpecificGzipBytes": 27355,
         "routeSpecificRawBytes": 81053
       },
       "/tenant/[subdomain]/pages": {
@@ -297,8 +297,8 @@
       "/tenant/[subdomain]/settings": {
         "firstLoadGzipBytes": 170245,
         "firstLoadRawBytes": 565558,
-        "routeSpecificGzipBytes": 29705,
-        "routeSpecificRawBytes": 92058
+        "routeSpecificGzipBytes": 32204,
+        "routeSpecificRawBytes": 99164
       },
       "/tenant/[subdomain]/threads/accounts": {
         "firstLoadGzipBytes": 167774,

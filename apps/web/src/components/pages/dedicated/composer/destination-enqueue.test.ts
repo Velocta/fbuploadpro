@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   buildFacebookEnqueueRequest,
+  buildInstagramEnqueueRequest,
   resolveFacebookDestinationId,
 } from './destination-enqueue';
 
@@ -207,5 +208,105 @@ describe('resolveFacebookDestinationId — page → unified destination', () => 
         fbPageId: 'fb-missing',
       })
     ).rejects.toThrow("Couldn't find this Page's publishing destination.");
+  });
+});
+
+describe('buildInstagramEnqueueRequest — composer vocabulary → unified contract', () => {
+  const mediaItem = (id: string, mediaType: 'image' | 'video') => ({
+    id,
+    mediaType,
+    url: `https://cdn.example.com/${id}.jpg`,
+  });
+
+  it('maps a photo to the image kind with the primary media only', () => {
+    const request = buildInstagramEnqueueRequest(DESTINATION_ID, {
+      format: 'photo',
+      caption: 'Hello',
+      firstComment: '  first!  ',
+      items: [mediaItem(MEDIA_ID, 'image')],
+      options: { collaborators: ['brand.account'] },
+      intent: 'now',
+      scheduleDate: null,
+    });
+    expect(request).toMatchObject({
+      platform: 'instagram',
+      destinationId: DESTINATION_ID,
+      kind: 'image',
+      platformFormat: null,
+      caption: 'Hello',
+      firstComment: 'first!',
+      mediaItemIds: [MEDIA_ID],
+      intent: 'now',
+      platformOptions: { collaborators: ['brand.account'] },
+    });
+    expect(request).not.toHaveProperty('scheduledAt');
+    expect(request).not.toHaveProperty('slotId');
+  });
+
+  it('maps a Reel to the video kind carrying the reel platform format', () => {
+    const request = buildInstagramEnqueueRequest(DESTINATION_ID, {
+      format: 'reel',
+      caption: 'Reel caption',
+      firstComment: '',
+      items: [mediaItem(MEDIA_ID, 'video')],
+      options: { shareToFeed: false },
+      intent: 'queue',
+      scheduleDate: null,
+    });
+    expect(request.kind).toBe('video');
+    expect(request.platformFormat).toBe('reel');
+    expect(request.intent).toBe('queue');
+    expect(request).not.toHaveProperty('firstComment');
+    expect(request.platformOptions).toEqual({ shareToFeed: false });
+  });
+
+  it('maps a carousel with the full ordered item list in platformOptions', () => {
+    const second = '22222222-2222-4222-8222-222222222222';
+    const request = buildInstagramEnqueueRequest(DESTINATION_ID, {
+      format: 'carousel',
+      caption: 'Swipe',
+      firstComment: '',
+      items: [mediaItem(MEDIA_ID, 'image'), mediaItem(second, 'video')],
+      options: {},
+      intent: 'schedule',
+      scheduleDate: new Date('2026-12-01T09:00:00.000Z'),
+    });
+    expect(request.kind).toBe('carousel');
+    expect(request.mediaItemIds).toEqual([MEDIA_ID]);
+    expect(request.intent).toBe('scheduled');
+    expect(request.scheduledAt).toBe('2026-12-01T09:00:00.000Z');
+    expect(request.platformOptions?.carouselItems).toEqual([
+      { mediaUrl: `https://cdn.example.com/${MEDIA_ID}.jpg`, mediaType: 'image' },
+      { mediaUrl: `https://cdn.example.com/${second}.jpg`, mediaType: 'video' },
+    ]);
+  });
+
+  it('maps a Story with no caption, no first comment and no options', () => {
+    const request = buildInstagramEnqueueRequest(DESTINATION_ID, {
+      format: 'story',
+      caption: 'should not ship',
+      firstComment: 'should not ship',
+      items: [mediaItem(MEDIA_ID, 'image')],
+      options: { collaborators: ['brand.account'] },
+      intent: 'now',
+      scheduleDate: null,
+    });
+    expect(request.kind).toBe('story');
+    expect(request.caption).toBe('');
+    expect(request).not.toHaveProperty('firstComment');
+    expect(request).not.toHaveProperty('platformOptions');
+  });
+
+  it('omits platformOptions entirely when nothing is set', () => {
+    const request = buildInstagramEnqueueRequest(DESTINATION_ID, {
+      format: 'photo',
+      caption: '',
+      firstComment: '',
+      items: [mediaItem(MEDIA_ID, 'image')],
+      options: {},
+      intent: 'queue',
+      scheduleDate: null,
+    });
+    expect(request).not.toHaveProperty('platformOptions');
   });
 });

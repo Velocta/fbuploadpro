@@ -19,10 +19,10 @@
  * owner's deliverable mounts into it. The composer slot is spec 132's
  * T-G0 host: it carries the destination's identity (id + platform) as
  * data attributes so the platform composer sets mount into it without a
- * frame change. The X composer (spec 132 §4.5) mounts here on the
- * enabling backend (PRs 750/756: destination enqueue + posting-slots
- * read); the remaining platforms' composers mount the same way as
- * their sets land.
+ * frame change. The X composer (spec 132 §4.5) and the Instagram
+ * composer (PR-C3) mount here on the enabling backend (PRs 750/756:
+ * destination enqueue + posting-slots read); the remaining platforms'
+ * composers mount the same way as their sets land.
  *
  * OD131-2 (History tab) is UNANSWERED: history mounts as a slot in
  * this frame with its existing state only — no tab is created or
@@ -62,6 +62,7 @@ import {
 import { EmptyState } from '@/components/shared/ui/empty-state';
 import { Skeleton } from '@/components/shared/ui/skeleton';
 import { StatusDot } from '@/components/shared/ui/status-dot';
+import { InstagramComposerSlot } from '@/components/pages/dedicated';
 
 /**
  * The X composer (spec 132 §4.5) loads on demand into the composer
@@ -232,6 +233,9 @@ interface DestinationSlotProps {
   slot: 'queue' | 'composer' | 'posting-times' | 'history';
   title: string;
   description: string;
+  /** The owner spec's landed deliverable, when one exists for this
+   *  destination — rendered in place of the not-yet-available state. */
+  children?: React.ReactNode;
 }
 
 /**
@@ -245,6 +249,7 @@ function DestinationSlot({
   slot,
   title,
   description,
+  children,
 }: Readonly<DestinationSlotProps>) {
   return (
     <section
@@ -255,7 +260,9 @@ function DestinationSlot({
       className="border-t border-line pt-6"
     >
       <h2 className="m-0 text-lg font-semibold text-ink">{title}</h2>
-      <EmptyState type="first-use" title={title} description={description} />
+      {children ?? (
+        <EmptyState type="first-use" title={title} description={description} />
+      )}
     </section>
   );
 }
@@ -273,27 +280,20 @@ export function DestinationSlots({
         title="Queue"
         description="Posts scheduled for this destination will appear here once its queue is available."
       />
-      {destination.platform === 'x' ? (
-        <section
-          data-testid="destination-slot-composer"
-          data-destination-id={destination.id}
-          data-platform={destination.platform}
-          aria-label="Composer"
-          className="border-t border-line pt-6"
-        >
-          <h2 className="m-0 text-lg font-semibold text-ink">Composer</h2>
+      <DestinationSlot
+        destination={destination}
+        slot="composer"
+        title="Composer"
+        description="The composer for this destination will open here once it is available."
+      >
+        {destination.platform === 'instagram' ? (
+          <InstagramComposerSlot subdomain={subdomain} destination={destination} />
+        ) : destination.platform === 'x' ? (
           <div className="mt-4">
             <XComposer subdomain={subdomain} destination={destination} />
           </div>
-        </section>
-      ) : (
-        <DestinationSlot
-          destination={destination}
-          slot="composer"
-          title="Composer"
-          description="The composer for this destination will open here once it is available."
-        />
-      )}
+        ) : undefined}
+      </DestinationSlot>
       <DestinationSlot
         destination={destination}
         slot="posting-times"
