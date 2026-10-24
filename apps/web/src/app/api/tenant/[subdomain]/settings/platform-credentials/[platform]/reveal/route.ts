@@ -22,6 +22,10 @@ async function extractSession(request: NextRequest): Promise<SessionPayload | nu
   try {
     return await verifySessionToken(token, getSessionSecret());
   } catch {
+    // Surfaced, not swallowed (spec 137 §3.1): an unverifiable
+    // session cookie on a secret-disclosure action is worth an
+    // audit line — the line never carries the token itself.
+    console.error('[Platform Credentials API] Session verification failed on a reveal request.');
     return null;
   }
 }
