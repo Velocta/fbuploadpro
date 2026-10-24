@@ -30,7 +30,6 @@ const PLATFORMS = [
     description:
       'Connect your Instagram account to schedule and publish posts from one place. Your workspace uses its own Instagram app details, so your accounts stay yours.',
     connectTestId: 'instagram-connect-link',
-    connectLabel: 'Connect Instagram',
   },
   {
     slug: 'threads',
@@ -39,7 +38,6 @@ const PLATFORMS = [
     description:
       'Connect your Threads account to schedule and publish posts from one place. Your workspace uses its own Threads app details, so your accounts stay yours.',
     connectTestId: 'threads-connect-link',
-    connectLabel: 'Connect Threads',
   },
   {
     slug: 'tiktok',
@@ -48,7 +46,6 @@ const PLATFORMS = [
     description:
       'You connect your account through our publishing partner — there is nothing to set up or paste here. When you connect, you sign in with TikTok, approve the connection, and confirm your account.',
     connectTestId: 'tiktok-connect-link',
-    connectLabel: 'Connect TikTok',
   },
   {
     slug: 'x',
@@ -57,7 +54,6 @@ const PLATFORMS = [
     description:
       'Simply sign in with X and approve the connection — there are no keys to create or paste. Your account is connected in a couple of clicks.',
     connectTestId: null,
-    connectLabel: null,
   },
   {
     slug: 'youtube',
@@ -66,7 +62,6 @@ const PLATFORMS = [
     description:
       'You connect your channel through our publishing partner — there is nothing to set up or paste here. When you connect, you sign in with YouTube, approve the connection, and pick your channel.',
     connectTestId: 'youtube-connect-link',
-    connectLabel: 'Connect YouTube',
   },
 ] as const;
 
@@ -120,7 +115,7 @@ test.describe('platform accounts shells (one shared shell)', () => {
         if (platform.connectTestId) {
           const connect = page.getByTestId(platform.connectTestId);
           await expect(connect).toBeVisible();
-          await expect(connect).toHaveText(platform.connectLabel ?? '');
+          await expect(connect).toHaveText(`Connect ${platform.name}`);
           await expectMinHeight44(connect);
         } else {
           await expect(
