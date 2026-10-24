@@ -94,7 +94,7 @@ export function PageTabDashboard({
       {/* 4 overview metric cards */}
       <div
         data-testid="dashboard-metrics-grid"
-        className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4"
+        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
       >
         <div data-testid="metric-followers" className={cardClass}>
           <span className={metricLabelClass}>Total Followers</span>
@@ -153,7 +153,7 @@ export function PageTabDashboard({
       </div>
 
       {/* Upcoming queue vs active slots */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(360px,100%),1fr))] gap-6">
+      <div className="grid gap-6 lg:grid-cols-2">
         <div data-testid="dashboard-upcoming-queue" className={`${cardClass} flex flex-col p-6`}>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="m-0 text-lg font-bold text-ink">Upcoming Queue</h2>

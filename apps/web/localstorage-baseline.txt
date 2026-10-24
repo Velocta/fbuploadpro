@@ -18,3 +18,7 @@
 # preferences go through the typed helper, never direct access.
 #
 # Format: <file> <count>
+#
+# Cleared by spec 131 PR-131-3: the tab-insights.tsx row (the last
+# non-allowlist entry) was removed when its browser-storage insights
+# cache was deleted (§8.6). No non-allowlist usages remain.

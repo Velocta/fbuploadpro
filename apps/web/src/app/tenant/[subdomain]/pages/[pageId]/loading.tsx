@@ -20,7 +20,7 @@ export default function PageDetailLoading() {
         </div>
       </div>
       <Skeleton className="h-11 w-full" />
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
           <Skeleton key={i} className="h-24 w-full" />
         ))}

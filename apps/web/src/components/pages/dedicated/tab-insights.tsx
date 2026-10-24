@@ -5,8 +5,8 @@
  * on shared/ui primitives + tokens and the spec 137 data layer.
  * Legacy file was read for behavioural facts and copy only.
  *
- * Storage duty (§8.6): the 15-minute localStorage insights cache is
- * DELETED (server-owned data never lives in localStorage, spec 137
+ * Storage duty (§8.6): the 15-minute browser-storage insights cache
+ * is DELETED (server-owned data never lives in browser storage, spec 137
  * §3.9) — `getCachedInsights` / `setCachedInsights` /
  * `INSIGHTS_CACHE_TTL_MS` are gone with it, and the localstorage
  * baseline row for this file is removed in this PR. Freshness is
@@ -202,7 +202,7 @@ export function PageTabInsights({
       {/* Loading skeleton at final geometry */}
       {isLoading && (
         <div data-testid="insights-loading" aria-busy="true" className="flex flex-col gap-6">
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[1, 2, 3, 4].map((i) => (
               <Skeleton key={i} className="h-24 w-full" />
             ))}
@@ -225,7 +225,7 @@ export function PageTabInsights({
         <>
           <div
             data-testid="insights-kpi-grid"
-            className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4"
+            className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
           >
             <div className={cardClass}>
               <span className={kpiLabelClass}>Total Followers</span>
@@ -262,7 +262,7 @@ export function PageTabInsights({
             )}
           </div>
 
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div data-testid="reactions-breakdown-card" className={cardClass}>
               <h4 className="m-0 mb-4 text-body font-semibold text-ink">Engagement Reactions</h4>
 

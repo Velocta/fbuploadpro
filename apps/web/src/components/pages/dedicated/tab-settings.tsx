@@ -255,7 +255,7 @@ export function PageTabSettings({
           <p className="mt-1 text-body text-ink-sub">Your page details and connection status.</p>
         </div>
 
-        <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div className={detailTileClass}>
             <span className={detailLabelClass}>Facebook Page ID</span>
             <div className={`${detailValueClass} font-mono`}>{page.fbPageId}</div>
