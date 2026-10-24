@@ -16,7 +16,10 @@
  * altText — no thread-chain authoring, chains are absent in v1);
  * intents now / scheduled / queue through the unified destination
  * enqueue; the limit indicator derives from the contracts limits
- * config (OD132-3(a) — no usage counts exist to read). No drafts
+ * config (OD132-3(a) — no usage counts exist to read). The §4.5
+ * identical-text warning compares the current text against the
+ * destination's recent unified queue items (PR-134-3's read) —
+ * advisory only, it never blocks or alters the copy. No drafts
  * (OD132-2 (c)).
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -31,6 +34,7 @@ import {
 } from '@fbuploadpro/contracts';
 import { api, buildTenantApiPath } from '@/lib/api';
 import type { DestinationDetail } from '@/lib/api/schemas/connect';
+import { ListDestinationQueueResponseSchema } from '@/lib/api/schemas/unified-queue';
 import { queryKeys } from '@/lib/data/query-keys';
 import { socialStatusLabel } from '@/components/accounts/social-accounts-list';
 import { Form, FormErrorSummary, type FormErrorSummaryEntry } from '@/components/shared/ui/form';
@@ -56,6 +60,7 @@ import {
 import { computeXValidationError, resolveXInitialScheduleValue, xSubmitButtonLabel } from './x-composer-validation';
 import { getXMediaItemError, XMediaArea, type XMediaItem } from './x-media-area';
 import { XComposerText } from './x-composer-text';
+import { hasRecentDuplicateXText } from './x-duplicate-warning';
 import { XPollBuilder } from './x-poll-builder';
 import { XComposerPreview } from './x-composer-preview';
 import { XIntentSection, XSubmitSection, type XQueueSlotsState } from './x-composer-sections';
@@ -114,6 +119,26 @@ export function XComposer({ subdomain, destination, onSubmitted }: Readonly<XCom
     staleTime: 60_000,
     enabled: isConnected,
   });
+  // The destination's unified queue items (PR-134-3's read) — the
+  // §4.5 identical-text warning's only data source (see
+  // x-duplicate-warning.ts for the "recent" definition). Queue data,
+  // 15s stale per spec 132 §7. A loading or failed read simply means
+  // no warning; it never blocks or errors the form.
+  const queueQuery = useQuery({
+    queryKey: queryKeys.tenant(subdomain).destinations.queue(destination.id),
+    queryFn: ({ signal }) =>
+      api.get(buildTenantApiPath(subdomain, `/destinations/${destination.id}/queue`), {
+        schema: ListDestinationQueueResponseSchema,
+        signal,
+      }),
+    staleTime: 15_000,
+    enabled: isConnected,
+  });
+  const showDuplicateWarning = useMemo(
+    () => hasRecentDuplicateXText(text, queueQuery.data?.items ?? []),
+    [text, queueQuery.data]
+  );
+
   const timezone = slotsQuery.data?.timezone ?? destination.timezone;
   const activeSlots = useMemo(
     () => (slotsQuery.data?.slots ?? []).filter((slot) => slot.isActive),
@@ -218,6 +243,11 @@ export function XComposer({ subdomain, destination, onSubmitted }: Readonly<XCom
       await queryClient.invalidateQueries({
         queryKey: queryKeys.tenant(subdomain).queue.all,
       });
+      // The just-submitted post is now one of this destination's
+      // recent items — refresh the §4.5 warning's data source.
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.tenant(subdomain).destinations.queue(destination.id),
+      });
       setSuccessMessage(message);
       onSubmitted?.(message);
       form.reset(X_COMPOSER_DEFAULT_VALUES);
@@ -315,6 +345,7 @@ export function XComposer({ subdomain, destination, onSubmitted }: Readonly<XCom
                 onBlur={field.onBlur}
                 required={item === null}
                 error={fieldState.error?.message}
+                duplicateWarning={showDuplicateWarning}
               />
             )}
           />

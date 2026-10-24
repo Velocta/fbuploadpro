@@ -6,12 +6,16 @@
  * validators: links count as 23 characters, CJK/emoji count double,
  * the limit is 280 weighted characters. The counter is always visible;
  * over-limit is a blocking inline error whose wording matches the
- * form summary exactly.
+ * form summary exactly. The §4.5 identical-text warning renders here
+ * too — icon + text under the field, advisory only (see
+ * x-duplicate-warning.ts).
  */
 import React from 'react';
+import { TriangleAlertIcon } from 'lucide-react';
 import { validateXText, X_MAX_WEIGHTED_CHARACTERS, X_URL_WEIGHTED_LENGTH } from '@fbuploadpro/contracts';
 import { Textarea } from '@/components/shared/ui/textarea';
 import { cn } from '@/lib/utils';
+import { X_DUPLICATE_TEXT_WARNING } from './x-duplicate-warning';
 
 export interface XComposerTextProps {
   value: string;
@@ -19,13 +23,26 @@ export interface XComposerTextProps {
   /** Required when no media is attached — a media post may omit text. */
   required?: boolean;
   error?: string | undefined;
+  /**
+   * The §4.5 identical-text warning: the current text matches a recent
+   * post for this destination. Advisory only — rendered under the
+   * field, never an error, never blocks submit, never alters the text.
+   */
+  duplicateWarning?: boolean;
   onBlur?: () => void;
 }
 
 export const XComposerText = React.forwardRef<HTMLTextAreaElement, XComposerTextProps>(
-  function XComposerText({ value, onChange, required = false, error, onBlur }, ref) {
+  function XComposerText({ value, onChange, required = false, error, duplicateWarning = false, onBlur }, ref) {
     const { weightedLength, remaining } = validateXText(value);
     const isOver = remaining < 0;
+    const describedBy =
+      [
+        error ? 'x-composer-text-error' : null,
+        duplicateWarning ? 'x-composer-duplicate-warning' : null,
+      ]
+        .filter(Boolean)
+        .join(' ') || undefined;
 
     return (
       <div data-testid="x-composer-text" className="flex flex-col gap-1.5">
@@ -42,12 +59,22 @@ export const XComposerText = React.forwardRef<HTMLTextAreaElement, XComposerText
           onBlur={onBlur}
           placeholder="Write your post…"
           aria-invalid={error ? true : undefined}
-          aria-describedby={error ? 'x-composer-text-error' : undefined}
+          aria-describedby={describedBy}
           className="min-h-24 resize-y"
         />
         {error ? (
           <p id="x-composer-text-error" role="alert" className="text-metadata font-medium text-brand-rose">
             {error}
+          </p>
+        ) : null}
+        {duplicateWarning ? (
+          <p
+            id="x-composer-duplicate-warning"
+            data-testid="x-composer-duplicate-warning"
+            className="m-0 flex items-start gap-2 text-metadata text-ink"
+          >
+            <TriangleAlertIcon className="mt-px size-4 shrink-0 text-brand-gold" aria-hidden />
+            <span>{X_DUPLICATE_TEXT_WARNING}</span>
           </p>
         ) : null}
         <div className="flex items-center justify-between gap-3">

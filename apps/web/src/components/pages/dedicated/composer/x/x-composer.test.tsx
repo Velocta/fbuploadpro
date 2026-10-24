@@ -74,8 +74,51 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 interface FetchOptions {
   slots?: unknown;
+  queue?: unknown;
+  queueStatus?: number;
   postStatus?: number;
   postBody?: unknown;
+}
+
+/** One unified queue item as PR-134-3's GET …/queue returns it. */
+function queueItemFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    destinationId: DESTINATION_ID,
+    platform: 'x',
+    kind: 'text',
+    platformFormat: null,
+    caption: 'Already posted',
+    title: null,
+    firstComment: null,
+    linkUrl: null,
+    mediaItemId: null,
+    mediaUrl: null,
+    media: null,
+    platformOptions: {},
+    scheduledTime: '2026-10-24T09:00:00.000Z',
+    slotId: null,
+    status: 'published',
+    retryCount: 0,
+    maxRetries: 3,
+    errorDetail: null,
+    externalPostId: '1234567890',
+    publishedAt: '2026-10-24T09:00:00.000Z',
+    createdAt: '2026-10-24T09:00:00.000Z',
+    updatedAt: '2026-10-24T09:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function queueResponse(items: Array<Record<string, unknown>>) {
+  return {
+    destinationId: DESTINATION_ID,
+    platform: 'x',
+    timezone: 'UTC',
+    destinationStatus: 'active',
+    limit: null,
+    items,
+  };
 }
 
 function makeFetch(posts: Array<Record<string, unknown>>, options: FetchOptions = {}) {
@@ -104,6 +147,12 @@ function makeFetch(posts: Array<Record<string, unknown>>, options: FetchOptions 
     }
     if (url.includes('/posting-slots')) {
       return jsonResponse(options.slots ?? SLOTS_RESPONSE);
+    }
+    if (url.includes(`/destinations/${DESTINATION_ID}/queue`)) {
+      if (options.queueStatus && options.queueStatus >= 400) {
+        return jsonResponse({ error: 'Unavailable' }, options.queueStatus);
+      }
+      return jsonResponse(options.queue ?? queueResponse([]));
     }
     if (url.includes('/media')) {
       return jsonResponse(MEDIA_RESPONSE);
@@ -391,6 +440,100 @@ describe('XComposer (spec 132 §4.5)', () => {
     await user.click(screen.getByTestId('x-composer-submit-btn'));
     expect(await screen.findByTestId('x-composer-submit-error')).toHaveTextContent('That slot is taken.');
     expect(screen.getByTestId('x-composer-text-field')).toHaveValue('Will fail');
+  });
+
+  it('warns visibly when the text matches a recent post, without blocking or altering the copy (§4.5)', async () => {
+    const user = userEvent.setup();
+    const posts: Array<Record<string, unknown>> = [];
+    const onSubmitted = vi.fn();
+    renderComposer(makeFetch(posts, { queue: queueResponse([queueItemFixture()]) }), { onSubmitted });
+    await screen.findByTestId('x-composer-queue-line');
+
+    // Surrounding whitespace still matches (trim-only normalisation) —
+    // and the warning appears with the plain-language copy.
+    fireEvent.change(screen.getByTestId('x-composer-text-field'), {
+      target: { value: '  Already posted  ' },
+    });
+    const warning = await screen.findByTestId('x-composer-duplicate-warning');
+    expect(warning).toBeVisible();
+    expect(warning).toHaveTextContent(
+      'This text matches a recent post for this account — X may reject it as a duplicate.'
+    );
+    // The field is not flagged invalid and the text is untouched.
+    expect(screen.getByTestId('x-composer-text-field')).not.toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByTestId('x-composer-text-field')).toHaveValue('  Already posted  ');
+
+    // The warning never blocks: submit stays enabled and the post
+    // goes out with the copy exactly as typed.
+    await user.click(screen.getByTestId('composer-intent-now'));
+    const submit = screen.getByTestId('x-composer-submit-btn');
+    await waitFor(() => expect(submit).toBeEnabled());
+    await user.click(submit);
+    await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toMatchObject({ caption: '  Already posted  ' });
+  });
+
+  it('shows no duplicate warning when the text differs from recent posts', async () => {
+    const posts: Array<Record<string, unknown>> = [];
+    renderComposer(makeFetch(posts, { queue: queueResponse([queueItemFixture()]) }));
+    await screen.findByTestId('x-composer-queue-line');
+    fireEvent.change(screen.getByTestId('x-composer-text-field'), {
+      target: { value: 'Something entirely new' },
+    });
+    // Let the queue read settle, then assert the warning never appears.
+    await waitFor(() => expect(screen.getByTestId('x-composer-text-count')).toHaveTextContent('22 / 280'));
+    expect(screen.queryByTestId('x-composer-duplicate-warning')).toBeNull();
+  });
+
+  it('does not warn for matches that only exist on cancelled or failed items', async () => {
+    const posts: Array<Record<string, unknown>> = [];
+    renderComposer(
+      makeFetch(posts, {
+        queue: queueResponse([
+          queueItemFixture({ status: 'cancelled' }),
+          queueItemFixture({
+            id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            status: 'failed',
+            publishedAt: null,
+            externalPostId: null,
+          }),
+        ]),
+      })
+    );
+    await screen.findByTestId('x-composer-queue-line');
+    fireEvent.change(screen.getByTestId('x-composer-text-field'), {
+      target: { value: 'Already posted' },
+    });
+    await waitFor(() => expect(screen.getByTestId('x-composer-text-count')).toHaveTextContent('14 / 280'));
+    expect(screen.queryByTestId('x-composer-duplicate-warning')).toBeNull();
+  });
+
+  it('warns when the matching item is still queued for this destination', async () => {
+    const posts: Array<Record<string, unknown>> = [];
+    renderComposer(
+      makeFetch(posts, {
+        queue: queueResponse([
+          queueItemFixture({ status: 'queued', publishedAt: null, externalPostId: null }),
+        ]),
+      })
+    );
+    await screen.findByTestId('x-composer-queue-line');
+    fireEvent.change(screen.getByTestId('x-composer-text-field'), {
+      target: { value: 'Already posted' },
+    });
+    expect(await screen.findByTestId('x-composer-duplicate-warning')).toBeVisible();
+  });
+
+  it('stays silent and fully usable when the queue read fails', async () => {
+    const user = userEvent.setup();
+    const posts: Array<Record<string, unknown>> = [];
+    renderComposer(makeFetch(posts, { queueStatus: 500 }));
+    await screen.findByTestId('x-composer-queue-line');
+    await user.type(screen.getByTestId('x-composer-text-field'), 'Already posted');
+    expect(screen.queryByTestId('x-composer-duplicate-warning')).toBeNull();
+    const submit = screen.getByTestId('x-composer-submit-btn');
+    await waitFor(() => expect(submit).toBeEnabled());
   });
 
   it('renders the not-connected state with no form when the destination is expired', () => {
