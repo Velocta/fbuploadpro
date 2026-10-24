@@ -10,7 +10,7 @@ import {
 } from '../../src/lib/csp';
 import { middleware } from '../../src/middleware';
 
-describe('CSP nonce generation (Spec 114 Phase 1)', () => {
+describe('CSP nonce generation (Spec 114 Phase 2)', () => {
   it('returns base64-charset strings', () => {
     const nonce = generateNonce();
     expect(nonce).toMatch(/^[A-Za-z0-9+/]+={0,2}$/);
@@ -37,11 +37,13 @@ describe('buildContentSecurityPolicy', () => {
     expect(policy).toContain("form-action 'self'");
   });
 
-  it('includes the passed nonce in script-src without unsafe-inline', () => {
+  it('includes the passed nonce and the theme-script hash in script-src without unsafe-inline', () => {
     const scriptSrc = policy
       .split('; ')
       .find((directive) => directive.startsWith('script-src'));
-    expect(scriptSrc).toBe("script-src 'self' 'nonce-testnonce123'");
+    expect(scriptSrc).toBe(
+      "script-src 'self' 'nonce-testnonce123' 'sha256-VJ5aiRQUDIxt2IqW7rL948ZVJ2ybNt0IZrHkS9RUcfk='"
+    );
     expect(scriptSrc).not.toContain('unsafe-inline');
   });
 
@@ -135,9 +137,11 @@ describe('middleware CSP headers', () => {
 
   function expectCspHeaders(res: Awaited<ReturnType<typeof middleware>>) {
     const csp = res.headers.get(CSP_HEADER_NAME);
+    expect(CSP_HEADER_NAME).toBe('Content-Security-Policy');
     expect(csp).not.toBeNull();
     expect(csp).toContain("'nonce-");
-    expect(res.headers.get('Content-Security-Policy')).toBeNull();
+    expect(csp).toContain("'sha256-VJ5aiRQUDIxt2IqW7rL948ZVJ2ybNt0IZrHkS9RUcfk='");
+    expect(res.headers.get('Content-Security-Policy-Report-Only')).toBeNull();
     expect(res.headers.get('Reporting-Endpoints')).toBe(
       'csp-endpoint="/api/csp-report"'
     );
@@ -154,7 +158,7 @@ describe('middleware CSP headers', () => {
     ],
     ['/api request', 'http://localhost:3000/api/health', 'localhost:3000', 200],
   ])(
-    'sets Report-Only CSP with a nonce on a %s',
+    'sets enforcing CSP with a nonce on a %s',
     async (_label, url, host, expectedStatus) => {
       const req = new NextRequest(url, {
         headers: { host },
