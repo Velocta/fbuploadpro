@@ -97,8 +97,11 @@ test.describe('connect account', () => {
     await page.getByTestId('connect-option-direct').click();
 
     // 5. Back on Accounts: success notice + the connected account card.
+    // (.first(): the accounts page renders the account in both the
+    // legacy card and the unified social list the fixtures now serve —
+    // either rendering proves the account is on the page.)
     await expect(page).toHaveURL(new RegExp(`/tenant/${TENANT.subdomain}/accounts`));
     await expect(page.getByText('Facebook account connected successfully.')).toBeVisible();
-    await expect(page.getByText(CONNECTED_ACCOUNT.displayName)).toBeVisible();
+    await expect(page.getByText(CONNECTED_ACCOUNT.displayName).first()).toBeVisible();
   });
 });
