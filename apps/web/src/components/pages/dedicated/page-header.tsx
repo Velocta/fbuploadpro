@@ -287,7 +287,7 @@ export function DedicatedPageHeader({
         </div>
 
         {/* Actions cluster */}
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span
             data-testid="header-automation-status"
             className="inline-flex h-11 items-center text-body font-medium text-ink-sub"
