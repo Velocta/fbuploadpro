@@ -63,11 +63,27 @@ const SLOTS = {
 async function expectNoHorizontalOverflow(
   page: import('@playwright/test').Page,
 ) {
-  const overflow = await page.evaluate(() => {
+  const report = await page.evaluate(() => {
     const el = document.scrollingElement;
-    return el ? el.scrollWidth - el.clientWidth : 0;
+    const overflow = el ? el.scrollWidth - el.clientWidth : 0;
+    if (overflow <= 0) return { overflow, offenders: [] as string[] };
+    // Failure diagnostics: which elements cross the right edge, so a
+    // 1px overflow names its culprit instead of guessing.
+    const vw = document.documentElement.clientWidth;
+    const offenders: string[] = [];
+    document.querySelectorAll('*').forEach((node) => {
+      const r = node.getBoundingClientRect();
+      if (r.right > vw + 0.5 && r.width > 0) {
+        offenders.push(
+          `${node.tagName}[${node.getAttribute('data-testid') ?? ''}] ` +
+            `${(node.getAttribute('class') ?? '').slice(0, 60)} ` +
+            `right=${Math.round(r.right * 10) / 10} text=${(node.textContent ?? '').slice(0, 30)}`,
+        );
+      }
+    });
+    return { overflow, offenders: offenders.slice(0, 8) };
   });
-  expect(overflow).toBeLessThanOrEqual(0);
+  expect(report.overflow, JSON.stringify(report.offenders)).toBeLessThanOrEqual(0);
 }
 
 async function openComposer(
