@@ -219,7 +219,10 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
           if (sql.includes('FROM legacy_queue_items WHERE') && sql.includes("status = 'queued'")) {
             return Promise.resolve([]);
           }
-          if (sql.includes('INSERT INTO legacy_queue_items')) {
+          // Queue mode inserts through the atomic slot claim since
+          // spec 139 A15 (claim_queue_slot_insert) — the mock returns
+          // the same created row the direct INSERT returned before.
+          if (sql.includes('INSERT INTO legacy_queue_items') || sql.includes('claim_queue_slot_insert')) {
             return Promise.resolve([
               {
                 id: queueItemId,

@@ -20,6 +20,27 @@ import { logServerError } from '@/lib/server-analytics';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
+ * Spec 139 A15 follow-up — bounded retries for the atomic slot claim.
+ *
+ * In queue mode (no explicit scheduledTime) the enqueue handler computes
+ * the next vacant slot from a snapshot of the page's queued items. A
+ * concurrent chain can claim that same slot instance first — and
+ * legacy_queue_items deliberately carries no unique index over the
+ * time dimension (it would break the queue reorder's time permutation),
+ * so an unguarded insert silently double-books the slot. The computed
+ * path therefore inserts through claim_queue_slot_insert (migration
+ * 20261024120000), which serializes claimants per page and reports the
+ * slot as occupied instead; the handler recomputes from a fresh
+ * snapshot and retries. Every lost race means another chain claimed a
+ * slot successfully, so the bound only needs to cover the realistic
+ * contention window (the bulk pool caps concurrency at 8 chains);
+ * exhausting it surfaces the enqueue failure instead of looping.
+ */
+const MAX_QUEUE_SLOT_CLAIM_ATTEMPTS = 10;
+
+type SchedulerSlots = Parameters<typeof calculateNextVacantSlot>[0]['slots'];
+
+/**
  * Row shapes consumed by the queue handlers (spec 137 §3.7).
  * QueueMediaRecord: the media columns the enqueue handlers read
  * (file_size is read by the eligibility check even though the selects
@@ -240,6 +261,12 @@ export async function handleEnqueueMedia(
     // 7. Resolve slot and scheduledTime
     let finalSlotId: string | null = null;
     let finalScheduledTime: string;
+    // Queue mode only (spec 139 A15): the slot list the computation ran
+    // over + the branch's no-vacancy message, captured so the insert
+    // step can recompute and retry when a racing chain claims the
+    // computed slot instance first. Null in explicit-time mode.
+    let computedSlots: SchedulerSlots | null = null;
+    let noVacantMessage: string | null = null;
 
     if (requestedSlotId) {
       const slotRows = (await dbClient.query(
@@ -272,19 +299,20 @@ export async function handleEnqueueMedia(
           [pageId, session.userId]
         );
 
+        const singleSlot: SchedulerSlots = [
+          {
+            id: slot.id,
+            slotTime:
+              typeof slot.slot_time === 'string'
+                ? slot.slot_time
+                : String(slot.slot_time),
+            timezone: pageTimezone,
+            isActive: Boolean(slot.is_active),
+            allowedFormats: slot.allowed_formats ?? null,
+          },
+        ];
         const computed = calculateNextVacantSlot({
-          slots: [
-            {
-              id: slot.id,
-              slotTime:
-                typeof slot.slot_time === 'string'
-                  ? slot.slot_time
-                  : String(slot.slot_time),
-              timezone: pageTimezone,
-              isActive: Boolean(slot.is_active),
-              allowedFormats: slot.allowed_formats ?? null,
-            },
-          ],
+          slots: singleSlot,
           existingScheduledTimes: (existingQueued || []).map(
             (q: QueuedTimeRow) => new Date(q.scheduled_time)
           ),
@@ -301,6 +329,8 @@ export async function handleEnqueueMedia(
             { status: 400 }
           );
         }
+        computedSlots = singleSlot;
+        noVacantMessage = 'No vacant slot available for specified slot';
         finalScheduledTime = computed.scheduledTime.toISOString();
       }
     } else if (requestedScheduledTime) {
@@ -330,15 +360,16 @@ export async function handleEnqueueMedia(
         [pageId, session.userId]
       );
 
+      const mappedSlots: SchedulerSlots = activeSlots.map((s: SlotCalcRow) => ({
+        id: s.id,
+        slotTime:
+          typeof s.slot_time === 'string' ? s.slot_time : String(s.slot_time),
+        timezone: pageTimezone,
+        isActive: Boolean(s.is_active),
+        allowedFormats: s.allowed_formats ?? null,
+      }));
       const computed = calculateNextVacantSlot({
-        slots: activeSlots.map((s: SlotCalcRow) => ({
-          id: s.id,
-          slotTime:
-            typeof s.slot_time === 'string' ? s.slot_time : String(s.slot_time),
-          timezone: pageTimezone,
-          isActive: Boolean(s.is_active),
-          allowedFormats: s.allowed_formats ?? null,
-        })),
+        slots: mappedSlots,
         existingScheduledTimes: (existingQueued || []).map(
           (q: QueuedTimeRow) => new Date(q.scheduled_time)
         ),
@@ -356,12 +387,67 @@ export async function handleEnqueueMedia(
         );
       }
 
+      computedSlots = mappedSlots;
+      noVacantMessage = 'No vacant slot available for this page';
       finalSlotId = computed.slotId;
       finalScheduledTime = computed.scheduledTime.toISOString();
     }
 
-    const insertRows = (await dbClient.query(
-      `INSERT INTO legacy_queue_items (
+    let createdRow: Record<string, unknown> | undefined;
+
+    if (computedSlots) {
+      // Queue mode: claim the computed slot instance atomically
+      // (spec 139 A15 follow-up). The RPC serializes claimants per
+      // page and returns no row when a racing chain took the slot
+      // instance after our snapshot — recompute from a fresh snapshot
+      // and retry instead of double-booking it.
+      for (let attempt = 0; attempt < MAX_QUEUE_SLOT_CLAIM_ATTEMPTS; attempt++) {
+        const claimRows = (await dbClient.query(
+          `SELECT * FROM public.claim_queue_slot_insert($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            session.userId,
+            pageId,
+            finalSlotId,
+            mediaId ?? null,
+            finalPostFormat,
+            linkUrl ?? null,
+            finalScheduledTime,
+            caption ?? '',
+            firstComment ?? null,
+          ]
+        )) as Record<string, unknown>[];
+
+        if (claimRows && claimRows.length > 0) {
+          createdRow = claimRows[0];
+          break;
+        }
+
+        if (attempt + 1 >= MAX_QUEUE_SLOT_CLAIM_ATTEMPTS) break;
+
+        const existingQueued = await dbClient.query<QueuedTimeRow>(
+          `SELECT scheduled_time FROM legacy_queue_items WHERE fb_page_id = $1 AND user_id = $2 AND status = 'queued'`,
+          [pageId, session.userId]
+        );
+        const recomputed = calculateNextVacantSlot({
+          slots: computedSlots,
+          existingScheduledTimes: (existingQueued || []).map(
+            (q: QueuedTimeRow) => new Date(q.scheduled_time)
+          ),
+          now: new Date(),
+          postFormat: finalPostFormat,
+        });
+        if (!recomputed) {
+          return NextResponse.json(
+            { error: 'NO_VACANT_SLOTS', message: noVacantMessage },
+            { status: 400 }
+          );
+        }
+        finalSlotId = recomputed.slotId;
+        finalScheduledTime = recomputed.scheduledTime.toISOString();
+      }
+    } else {
+      const insertRows = (await dbClient.query(
+        `INSERT INTO legacy_queue_items (
          user_id,
          fb_page_id,
          slot_id,
@@ -394,20 +480,29 @@ export async function handleEnqueueMedia(
          published_at,
          created_at,
          updated_at`,
-      [
-        session.userId,
-        pageId,
-        finalSlotId,
-        mediaId ?? null,
-        finalPostFormat,
-        linkUrl ?? null,
-        finalScheduledTime,
-        caption ?? '',
-        firstComment ?? null,
-      ]
-    )) as Record<string, unknown>[];
+        [
+          session.userId,
+          pageId,
+          finalSlotId,
+          mediaId ?? null,
+          finalPostFormat,
+          linkUrl ?? null,
+          finalScheduledTime,
+          caption ?? '',
+          firstComment ?? null,
+        ]
+      )) as Record<string, unknown>[];
 
-    const createdRow = insertRows[0];
+      createdRow = insertRows[0];
+    }
+
+    if (!createdRow) {
+      // Queue mode: lost every claim race within the attempt bound.
+      // Explicit mode: the insert returned no row. Both surface the
+      // failure the unguarded insert produced (a throw → 500, or a
+      // per-item failure inside a bulk run).
+      throw new Error('Failed to enqueue media');
+    }
 
     const queueItem = {
       id: createdRow.id,
@@ -534,6 +629,12 @@ export async function handleEnqueueMedia(
   // 7. Resolve slot and scheduledTime
   let finalSlotId: string | null = null;
   let finalScheduledTime: string;
+  // Queue mode only (spec 139 A15): the slot list the computation ran
+  // over + the branch's no-vacancy message, captured so the insert
+  // step can recompute and retry when a racing chain claims the
+  // computed slot instance first. Null in explicit-time mode.
+  let computedSlots: SchedulerSlots | null = null;
+  let noVacantMessage: string | null = null;
 
   if (requestedSlotId) {
     const { data: slot } = await supabase
@@ -563,19 +664,20 @@ export async function handleEnqueueMedia(
         .eq('user_id', session.userId)
         .eq('status', 'queued');
 
+      const singleSlot: SchedulerSlots = [
+        {
+          id: slot.id,
+          slotTime:
+            typeof slot.slot_time === 'string'
+              ? slot.slot_time
+              : String(slot.slot_time),
+          timezone: pageTimezone,
+          isActive: Boolean(slot.is_active),
+          allowedFormats: (slot.allowed_formats as string[] | null) ?? null,
+        },
+      ];
       const computed = calculateNextVacantSlot({
-        slots: [
-          {
-            id: slot.id,
-            slotTime:
-              typeof slot.slot_time === 'string'
-                ? slot.slot_time
-                : String(slot.slot_time),
-            timezone: pageTimezone,
-            isActive: Boolean(slot.is_active),
-            allowedFormats: (slot.allowed_formats as string[] | null) ?? null,
-          },
-        ],
+        slots: singleSlot,
         existingScheduledTimes: (existingQueued || []).map(
           (q: QueuedTimeRow) => new Date(q.scheduled_time)
         ),
@@ -592,6 +694,8 @@ export async function handleEnqueueMedia(
           { status: 400 }
         );
       }
+      computedSlots = singleSlot;
+      noVacantMessage = 'No vacant slot available for specified slot';
       finalScheduledTime = computed.scheduledTime.toISOString();
     }
   } else if (requestedScheduledTime) {
@@ -623,15 +727,16 @@ export async function handleEnqueueMedia(
       .eq('user_id', session.userId)
       .eq('status', 'queued');
 
+    const mappedSlots: SchedulerSlots = activeSlots.map((s: SlotCalcRow) => ({
+      id: s.id,
+      slotTime:
+        typeof s.slot_time === 'string' ? s.slot_time : String(s.slot_time),
+      timezone: pageTimezone,
+      isActive: Boolean(s.is_active),
+      allowedFormats: s.allowed_formats ?? null,
+    }));
     const computed = calculateNextVacantSlot({
-      slots: activeSlots.map((s: SlotCalcRow) => ({
-        id: s.id,
-        slotTime:
-          typeof s.slot_time === 'string' ? s.slot_time : String(s.slot_time),
-        timezone: pageTimezone,
-        isActive: Boolean(s.is_active),
-        allowedFormats: s.allowed_formats ?? null,
-      })),
+      slots: mappedSlots,
       existingScheduledTimes: (existingQueued || []).map(
         (q: QueuedTimeRow) => new Date(q.scheduled_time)
       ),
@@ -649,31 +754,95 @@ export async function handleEnqueueMedia(
       );
     }
 
+    computedSlots = mappedSlots;
+    noVacantMessage = 'No vacant slot available for this page';
     finalSlotId = computed.slotId;
     finalScheduledTime = computed.scheduledTime.toISOString();
   }
 
   // 8. Insert into legacy_queue_items
-  const { data: createdRow, error: insertErr } = await supabase
-    .from('legacy_queue_items')
-    .insert({
-      user_id: session.userId,
-      fb_page_id: pageId,
-      slot_id: finalSlotId,
-      media_id: mediaId ?? null,
-      post_format: finalPostFormat,
-      link_url: linkUrl ?? null,
-      scheduled_time: finalScheduledTime,
-      caption: caption ?? '',
-      first_comment: firstComment ?? null,
-      status: 'queued',
-      retry_count: 0,
-      max_retries: 3,
-    })
-    .select()
-    .single();
+  let createdRow: Record<string, unknown> | null = null;
 
-  if (insertErr || !createdRow) {
+  if (computedSlots) {
+    // Queue mode: claim the computed slot instance atomically
+    // (spec 139 A15 follow-up). The RPC serializes claimants per page
+    // and returns no row when a racing chain took the slot instance
+    // after our snapshot — recompute from a fresh snapshot and retry
+    // instead of double-booking it.
+    for (let attempt = 0; attempt < MAX_QUEUE_SLOT_CLAIM_ATTEMPTS; attempt++) {
+      const { data: claimRows, error: claimErr } = await supabase.rpc(
+        'claim_queue_slot_insert',
+        {
+          p_user_id: session.userId,
+          p_fb_page_id: pageId,
+          p_slot_id: finalSlotId,
+          p_media_id: mediaId ?? null,
+          p_post_format: finalPostFormat,
+          p_link_url: linkUrl ?? null,
+          p_scheduled_time: finalScheduledTime,
+          p_caption: caption ?? '',
+          p_first_comment: firstComment ?? null,
+        }
+      );
+
+      if (claimErr) break;
+      if (Array.isArray(claimRows) && claimRows.length > 0) {
+        createdRow = claimRows[0] as Record<string, unknown>;
+        break;
+      }
+
+      if (attempt + 1 >= MAX_QUEUE_SLOT_CLAIM_ATTEMPTS) break;
+
+      const { data: existingQueued } = await supabase
+        .from('legacy_queue_items')
+        .select('scheduled_time')
+        .eq('fb_page_id', pageId)
+        .eq('user_id', session.userId)
+        .eq('status', 'queued');
+
+      const recomputed = calculateNextVacantSlot({
+        slots: computedSlots,
+        existingScheduledTimes: (existingQueued || []).map(
+          (q: QueuedTimeRow) => new Date(q.scheduled_time)
+        ),
+        now: new Date(),
+        postFormat: finalPostFormat,
+      });
+      if (!recomputed) {
+        return NextResponse.json(
+          { error: 'NO_VACANT_SLOTS', message: noVacantMessage },
+          { status: 400 }
+        );
+      }
+      finalSlotId = recomputed.slotId;
+      finalScheduledTime = recomputed.scheduledTime.toISOString();
+    }
+  } else {
+    const { data: insertedRow, error: insertErr } = await supabase
+      .from('legacy_queue_items')
+      .insert({
+        user_id: session.userId,
+        fb_page_id: pageId,
+        slot_id: finalSlotId,
+        media_id: mediaId ?? null,
+        post_format: finalPostFormat,
+        link_url: linkUrl ?? null,
+        scheduled_time: finalScheduledTime,
+        caption: caption ?? '',
+        first_comment: firstComment ?? null,
+        status: 'queued',
+        retry_count: 0,
+        max_retries: 3,
+      })
+      .select()
+      .single();
+
+    if (!insertErr && insertedRow) {
+      createdRow = insertedRow as Record<string, unknown>;
+    }
+  }
+
+  if (!createdRow) {
     return NextResponse.json({ error: 'Failed to enqueue media' }, { status: 500 });
   }
 
