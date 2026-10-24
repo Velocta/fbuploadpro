@@ -433,6 +433,7 @@ describe('settings, workspaces and connect schemas', () => {
         avatarUrl: null,
         timezone: 'UTC',
         status: 'active',
+        accountType: null,
         platform: 'facebook',
         account: { id: UUID2, displayName: 'Jane', platform: 'facebook', status: 'active' },
       },

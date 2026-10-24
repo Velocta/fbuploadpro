@@ -62,6 +62,7 @@ const SOCIAL_LIST = {
           avatarUrl: null,
           timezone: 'UTC',
           status: 'active',
+          accountType: null,
         },
       ],
     },
