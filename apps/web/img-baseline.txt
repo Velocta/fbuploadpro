@@ -32,4 +32,3 @@
 # Format: <file> <count>
 apps/web/src/components/media/media-import-progress-row.tsx 1
 apps/web/src/components/media/media-import-staging.tsx 1
-apps/web/src/components/pages/dedicated/page-header.tsx 1

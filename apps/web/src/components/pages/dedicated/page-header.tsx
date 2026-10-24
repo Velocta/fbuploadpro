@@ -1,23 +1,47 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+/**
+ * Dedicated Page identity header (spec 131 PR-131-3) — clean-room
+ * rebuild on shared/ui primitives + tokens, adopting the canonical
+ * §1.3 identity-header pattern landed by PR-131-4 in the destinations
+ * frame: platform icon + avatar + full name in a fixed position
+ * (UX Rule 1), status as colour + icon + text (OD-3 / UX Rule 27 —
+ * never colour alone). Legacy file was read for behavioural facts and
+ * copy only.
+ *
+ * Data: the header holds NO fetch of its own — the former checkpoint
+ * banner's raw PATCH is deleted; reactivation goes through the frame's
+ * status mutation via `onStatusToggle` (the typed data layer), exactly
+ * as the Settings tab's copy of the banner already did in effect.
+ * The actions menu is the shared/ui Menu (Radix) — the hand-rolled
+ * dropdown and its document listeners are deleted with it.
+ */
+
+import * as React from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
-  THEME,
-  PALETTE,
-  RADII,
-  SPACING,
-  TYPOGRAPHY,
-  STATUS_SIGNALS,
-  COMPONENT_STYLES,
-} from '@/lib/theme';
-import {
-  type FacebookPageItem,
-  getPageStatusRingBorder,
-} from '../page-card';
+  ChevronLeftIcon,
+  CopyIcon,
+  ExternalLinkIcon,
+  MoreVerticalIcon,
+  PlusIcon,
+  PowerIcon,
+} from 'lucide-react';
 
-/** How long the "copied" feedback stays visible on the page-ID copy button. */
-const COPY_FEEDBACK_DURATION_MS = 2000;
+import { reportError } from '@/lib/report-error';
+import { Banner } from '@/components/shared/ui/banner';
+import { Button } from '@/components/shared/ui/button';
+import {
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
+} from '@/components/shared/ui/menu';
+import { StatusDot, type Status } from '@/components/shared/ui/status-dot';
+import { cn } from '@/lib/utils';
+import type { FacebookPageItem } from '../page-card';
 
 export interface DedicatedPageHeaderProps {
   page: FacebookPageItem;
@@ -29,9 +53,9 @@ export interface DedicatedPageHeaderProps {
 
 interface PageStatusDetails {
   isPaused: boolean;
-  isNeedsAttention: boolean;
-  statusSignal: (typeof STATUS_SIGNALS)[keyof typeof STATUS_SIGNALS];
+  status: Status;
   statusLabel: string;
+  ringClass: string;
 }
 
 function resolvePageStatus(status: FacebookPageItem['status']): PageStatusDetails {
@@ -42,213 +66,75 @@ function resolvePageStatus(status: FacebookPageItem['status']): PageStatusDetail
   ) {
     return {
       isPaused: false,
-      isNeedsAttention: true,
-      statusSignal: STATUS_SIGNALS.critical,
+      status: 'critical',
       statusLabel: 'Needs Attention',
+      ringClass: 'ring-signal-critical',
     };
   }
 
   if (status === 'paused') {
     return {
       isPaused: true,
-      isNeedsAttention: false,
-      statusSignal: STATUS_SIGNALS.queued,
+      status: 'queued',
       statusLabel: 'Paused',
+      ringClass: 'ring-signal-queued',
+    };
+  }
+
+  if (status === 'active') {
+    return {
+      isPaused: false,
+      status: 'operational',
+      statusLabel: 'Active',
+      ringClass: 'ring-signal-operational',
     };
   }
 
   return {
     isPaused: false,
-    isNeedsAttention: false,
-    statusSignal: STATUS_SIGNALS.operational,
+    status: 'idle',
     statusLabel: 'Active',
+    ringClass: 'ring-line',
   };
 }
 
-function useDropdownDismiss(
-  isOpen: boolean,
-  setIsOpen: (open: boolean) => void,
-  dropdownRef: React.RefObject<HTMLDivElement | null>
-) {
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen, setIsOpen, dropdownRef]);
-}
-
-interface CheckpointBannerProps {
-  subdomain: string;
-  pageId: string;
-  isUpdatingStatus: boolean;
-  setIsUpdatingStatus: (updating: boolean) => void;
-  onStatusToggle: (status: 'active' | 'paused') => Promise<void>;
-}
-
-function CheckpointBanner({
-  subdomain,
-  pageId,
-  isUpdatingStatus,
-  setIsUpdatingStatus,
-  onStatusToggle,
-}: Readonly<CheckpointBannerProps>) {
-  const handleReactivate = async () => {
-    setIsUpdatingStatus(true);
-    try {
-      const res = await fetch(`/api/tenant/${subdomain}/pages/${pageId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'active' }),
-      });
-      if (res.ok) {
-        await onStatusToggle('active');
-      }
-    } catch {
-      await onStatusToggle('active');
-    } finally {
-      setIsUpdatingStatus(false);
-    }
-  };
-
+/** Facebook glyph in the platform-nav-config icon style (lucide ships
+ * no brand icons) — same local glyph as PR-131-4's destination frame. */
+function FacebookPlatformIcon() {
   return (
-    <div
-      data-testid="checkpoint-reactivation-banner"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: SPACING.md,
-        padding: SPACING.md,
-        marginBottom: SPACING.md,
-        borderRadius: RADII.sm,
-        backgroundColor: 'rgba(245, 158, 11, 0.1)',
-        border: '1px solid rgba(245, 158, 11, 0.3)',
-        color: `var(--text-main, ${THEME.default.text.primary})`,
-        flexWrap: 'wrap',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: SPACING.sm,
-          flex: '1 1 300px',
-        }}
-      >
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={PALETTE.primary}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{ flexShrink: 0 }}
-          aria-hidden="true"
-        >
-          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-          <line x1="12" y1="9" x2="12" y2="13" />
-          <line x1="12" y1="17" x2="12.01" y2="17" />
-        </svg>
-        <div>
-          <div
-            style={{
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              fontSize: '0.875rem',
-            }}
-          >
-            Facebook Checkpoint Verification Required
-          </div>
-          <div
-            style={{
-              fontSize: '0.8125rem',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            }}
-          >
-            Facebook requires verification in the mobile app or browser before automated publishing can resume.
-          </div>
-        </div>
-      </div>
-      <button
-        type="button"
-        data-testid="reactivate-page-btn"
-        disabled={isUpdatingStatus}
-        onClick={handleReactivate}
-        style={{
-          ...COMPONENT_STYLES.primaryButton,
-          height: '34px',
-          padding: `0 ${SPACING.md}`,
-          color: PALETTE.background,
-          border: `1px solid ${PALETTE.primary}`,
-          fontSize: '0.8125rem',
-          fontWeight: TYPOGRAPHY.weights.semibold,
-          cursor: isUpdatingStatus ? 'not-allowed' : 'pointer',
-          whiteSpace: 'nowrap',
-          boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
-        }}
-      >
-        {isUpdatingStatus ? 'Reactivating...' : 'Mark Verified & Reactivate Page'}
-      </button>
-    </div>
-  );
-}
-
-function SubtitleHairlineDivider() {
-  return (
-    <span
+    <svg
+      width={20}
+      height={20}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
       aria-hidden="true"
-      style={{
-        width: '1px',
-        height: '12px',
-        backgroundColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
-        flexShrink: 0,
-      }}
-    />
+    >
+      <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+    </svg>
   );
 }
 
-function renderDedicatedAvatar(
-  page: FacebookPageItem,
-  failedAvatarUrl: string | null,
-  setFailedAvatarUrl: React.Dispatch<React.SetStateAction<string | null>>,
-  statusRingBorder: string,
-  monogram: string
-) {
+function DedicatedAvatar({
+  page,
+  ringClass,
+  monogram,
+}: Readonly<{ page: FacebookPageItem; ringClass: string; monogram: string }>) {
+  const [failedAvatarUrl, setFailedAvatarUrl] = React.useState<string | null>(null);
+
   if (page.profilePictureUrl && failedAvatarUrl !== page.profilePictureUrl) {
     return (
-      <img
+      <Image
         src={page.profilePictureUrl}
         alt={page.pageName}
         data-testid="dedicated-page-avatar"
-        onError={() =>
-          setFailedAvatarUrl(page.profilePictureUrl ?? '__error__')
-        }
-        style={{
-          width: '44px',
-          height: '44px',
-          borderRadius: RADII.md,
-          objectFit: 'cover',
-          border: statusRingBorder,
-          flexShrink: 0,
-        }}
+        width={44}
+        height={44}
+        onError={() => setFailedAvatarUrl(page.profilePictureUrl ?? '__error__')}
+        className={cn('size-11 shrink-0 rounded-md object-cover ring-2', ringClass)}
       />
     );
   }
@@ -256,325 +142,12 @@ function renderDedicatedAvatar(
   return (
     <div
       data-testid="dedicated-page-avatar-fallback"
-      style={{
-        width: '44px',
-        height: '44px',
-        borderRadius: RADII.md,
-        backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-        border: statusRingBorder,
-        color: PALETTE.primary,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontWeight: TYPOGRAPHY.weights.bold,
-        fontSize: '0.9375rem',
-        flexShrink: 0,
-      }}
+      className={cn(
+        'flex size-11 shrink-0 items-center justify-center rounded-md bg-subtle text-body font-bold text-brand-gold ring-2',
+        ringClass
+      )}
     >
       {monogram}
-    </div>
-  );
-}
-
-function renderDedicatedSubtitle(
-  page: FacebookPageItem,
-  statusSignal: (typeof STATUS_SIGNALS)[keyof typeof STATUS_SIGNALS],
-  statusLabel: string
-) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: SPACING.sm,
-        marginTop: '4px',
-        fontSize: '0.8125rem',
-        color: `var(--text-sub, ${THEME.default.text.secondary})`,
-        flexWrap: 'wrap',
-      }}
-    >
-      <div
-        data-testid="dedicated-page-status"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '6px',
-        }}
-      >
-        <span
-          style={{
-            width: '6px',
-            height: '6px',
-            borderRadius: '50%',
-            backgroundColor: statusSignal.dot,
-            boxShadow: statusSignal.halo,
-            flexShrink: 0,
-          }}
-        />
-        <span
-          style={{
-            color: statusSignal.color,
-            fontWeight: TYPOGRAPHY.weights.medium,
-          }}
-        >
-          {statusLabel}
-        </span>
-      </div>
-
-      {page.accountDisplayName && (
-        <>
-          <SubtitleHairlineDivider />
-          <span>Connected via {page.accountDisplayName}</span>
-        </>
-      )}
-
-      {typeof page.currentFollowers === 'number' && (
-        <>
-          <SubtitleHairlineDivider />
-          <span>
-            {page.currentFollowers.toLocaleString('en-US')} followers
-          </span>
-        </>
-      )}
-
-      {page.category && (
-        <>
-          <SubtitleHairlineDivider />
-          <span>{page.category}</span>
-        </>
-      )}
-    </div>
-  );
-}
-
-interface PageMoreMenuRenderProps {
-  dropdownRef: React.RefObject<HTMLDivElement | null>;
-  isDropdownOpen: boolean;
-  setIsDropdownOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  hasCopiedId: boolean;
-  handleCopyId: () => Promise<void>;
-  fbPageUrl: string;
-  onDisconnectRequest: () => void;
-}
-
-function renderPageMoreMenu(props: PageMoreMenuRenderProps) {
-  const {
-    dropdownRef,
-    isDropdownOpen,
-    setIsDropdownOpen,
-    hasCopiedId,
-    handleCopyId,
-    fbPageUrl,
-    onDisconnectRequest,
-  } = props;
-
-  return (
-    <div ref={dropdownRef} style={{ position: 'relative' }}>
-      <button
-        type="button"
-        data-testid="header-settings-dropdown-btn"
-        aria-label="Page actions menu"
-        aria-expanded={isDropdownOpen}
-        onClick={() => setIsDropdownOpen((prev) => !prev)}
-        style={{
-          width: '34px',
-          height: '34px',
-          padding: 0,
-          backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          borderRadius: RADII.sm,
-          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          transition: 'color 0.12s ease, border-color 0.12s ease',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
-          e.currentTarget.style.borderColor = `var(--border-strong, ${THEME.default.borders.strong})`;
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
-          e.currentTarget.style.borderColor = `var(--border-subtle, ${THEME.default.borders.hairline})`;
-        }}
-      >
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <circle cx="12" cy="12" r="1" />
-          <circle cx="12" cy="5" r="1" />
-          <circle cx="12" cy="19" r="1" />
-        </svg>
-      </button>
-
-      {isDropdownOpen && (
-        <div
-          data-testid="header-settings-menu"
-          style={{
-            position: 'absolute',
-            right: 0,
-            top: '40px',
-            zIndex: 50,
-            minWidth: '180px',
-            backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-            borderRadius: RADII.sm,
-            boxShadow: `var(--shadow-elevated, ${THEME.default.shadows.elevated})`,
-            padding: SPACING.xs,
-          }}
-        >
-          <button
-            type="button"
-            data-testid="header-menu-copy-id-btn"
-            onClick={handleCopyId}
-            style={{
-              width: '100%',
-              textAlign: 'left',
-              background: 'none',
-              border: 'none',
-              padding: `${SPACING.sm} ${SPACING.md}`,
-              fontSize: '0.8125rem',
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              borderRadius: RADII.xs,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: SPACING.xs,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = `var(--bg-hover, ${THEME.default.surfaces.hover})`;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }}
-          >
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-            </svg>
-            <span>{hasCopiedId ? 'Page ID Copied' : 'Copy Page ID'}</span>
-          </button>
-
-          <a
-            href={fbPageUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => setIsDropdownOpen(false)}
-            style={{
-              width: '100%',
-              textAlign: 'left',
-              background: 'none',
-              border: 'none',
-              padding: `${SPACING.sm} ${SPACING.md}`,
-              fontSize: '0.8125rem',
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              borderRadius: RADII.xs,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: SPACING.xs,
-              textDecoration: 'none',
-              boxSizing: 'border-box',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = `var(--bg-hover, ${THEME.default.surfaces.hover})`;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }}
-          >
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-              <polyline points="15 3 21 3 21 9" />
-              <line x1="10" y1="14" x2="21" y2="3" />
-            </svg>
-            <span>Open on Facebook</span>
-          </a>
-
-          <div
-            style={{
-              height: '1px',
-              backgroundColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
-              margin: `${SPACING.xs} 0`,
-            }}
-          />
-
-          <button
-            type="button"
-            data-testid="header-menu-disconnect-btn"
-            onClick={() => {
-              setIsDropdownOpen(false);
-              onDisconnectRequest();
-            }}
-            style={{
-              width: '100%',
-              textAlign: 'left',
-              background: 'none',
-              border: 'none',
-              padding: `${SPACING.sm} ${SPACING.md}`,
-              fontSize: '0.8125rem',
-              color: PALETTE.accent3,
-              borderRadius: RADII.xs,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: SPACING.xs,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor =
-                'rgba(246, 70, 93, 0.12)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }}
-          >
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
-              <line x1="12" y1="2" x2="12" y2="12" />
-            </svg>
-            <span>Disconnect Page</span>
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -587,148 +160,89 @@ export function DedicatedPageHeader({
   onDisconnectRequest,
 }: Readonly<DedicatedPageHeaderProps>) {
   const router = useRouter();
-  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [hasCopiedId, setHasCopiedId] = useState(false);
-  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = React.useState(false);
+  const [hasCopiedId, setHasCopiedId] = React.useState(false);
 
   const statusInfo = resolvePageStatus(page.status);
-  const statusRingBorder = getPageStatusRingBorder(page.status);
   const monogram = (page.pageName || 'P').slice(0, 2).toUpperCase();
   const fbPageUrl = `https://facebook.com/${page.fbPageId}`;
-
-  useDropdownDismiss(isDropdownOpen, setIsDropdownOpen, dropdownRef);
-
-  const handleCopyId = async () => {
-    try {
-      await navigator.clipboard.writeText(page.fbPageId);
-      setHasCopiedId(true);
-      setTimeout(() => setHasCopiedId(false), COPY_FEEDBACK_DURATION_MS);
-    } catch {
-      // Clipboard fallback
-    }
-    setIsDropdownOpen(false);
-  };
 
   const isCheckpoint =
     page.status === 'page_checkpoint' ||
     (page.status as string) === 'checkpoint_required';
 
+  const handleCopyId = async () => {
+    try {
+      await navigator.clipboard.writeText(page.fbPageId);
+      setHasCopiedId(true);
+      setTimeout(() => setHasCopiedId(false), 2000);
+    } catch (error) {
+      reportError(error, { source: 'page-header-copy-id' });
+    }
+  };
+
+  const handleReactivate = async () => {
+    setIsUpdatingStatus(true);
+    try {
+      await onStatusToggle('active');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
   return (
-    <div
-      data-testid="dedicated-page-header"
-      style={{
-        marginBottom: SPACING.xl,
-      }}
-    >
-      {/* Quiet Back Link (Option A) */}
-      <div style={{ marginBottom: SPACING.md }}>
+    <div data-testid="dedicated-page-header" className="mb-6">
+      {/* Quiet back link */}
+      <div className="mb-4">
         <button
           type="button"
           data-testid="back-to-pages-link"
           onClick={() => router.push(`/tenant/${subdomain}/pages`)}
-          style={{
-            background: 'none',
-            border: 'none',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: SPACING.xs,
-            fontSize: '0.8125rem',
-            fontWeight: TYPOGRAPHY.weights.medium,
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            cursor: 'pointer',
-            padding: 0,
-            transition: 'color 0.15s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
-          }}
+          className="inline-flex min-h-11 items-center gap-1 px-1 text-body font-medium text-ink-sub transition-colors hover:text-ink"
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="m15 18-6-6 6-6" />
-          </svg>
+          <ChevronLeftIcon className="size-4" aria-hidden />
           <span>Facebook Pages</span>
         </button>
       </div>
 
-      {/* Checkpoint Reactivation Banner */}
+      {/* Checkpoint reactivation banner */}
       {isCheckpoint && (
-        <CheckpointBanner
-          subdomain={subdomain}
-          pageId={page.id}
-          isUpdatingStatus={isUpdatingStatus}
-          setIsUpdatingStatus={setIsUpdatingStatus}
-          onStatusToggle={onStatusToggle}
-        />
+        <div className="mb-4 overflow-hidden rounded-md border border-line">
+          <Banner
+            variant="warning"
+            data-testid="checkpoint-reactivation-banner"
+            title="Facebook Checkpoint Verification Required"
+            description="Facebook requires verification in the mobile app or browser before automated publishing can resume."
+            action={
+              <Button
+                type="button"
+                data-testid="reactivate-page-btn"
+                disabled={isUpdatingStatus}
+                onClick={() => void handleReactivate()}
+              >
+                {isUpdatingStatus ? 'Reactivating...' : 'Mark Verified & Reactivate Page'}
+              </Button>
+            }
+          />
+        </div>
       )}
 
-      {/* Main Header Container */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: SPACING.lg,
-          flexWrap: 'wrap',
-        }}
-      >
-        {/* Left Side: Avatar & Information */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.md,
-            flex: '1 1 340px',
-            minWidth: 0,
-          }}
-        >
-          {renderDedicatedAvatar(
-            page,
-            failedAvatarUrl,
-            setFailedAvatarUrl,
-            statusRingBorder,
-            monogram
-          )}
+      {/* Main header: identity left, actions right */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <span aria-hidden className="flex size-6 shrink-0 items-center justify-center text-ink-sub">
+            <FacebookPlatformIcon />
+          </span>
+          <DedicatedAvatar page={page} ringClass={statusInfo.ringClass} monogram={monogram} />
 
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: SPACING.sm,
-                flexWrap: 'wrap',
-              }}
-            >
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2">
               <h1
                 data-testid="dedicated-page-heading"
-                style={{
-                  margin: 0,
-                  fontSize: '1.5rem',
-                  fontWeight: TYPOGRAPHY.weights.bold,
-                  letterSpacing: TYPOGRAPHY.tracking.h1,
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
+                className="m-0 truncate text-xxl font-bold tracking-h1 text-ink"
               >
                 {page.pageName}
               </h1>
-
               <a
                 href={fbPageUrl}
                 target="_blank"
@@ -736,124 +250,90 @@ export function DedicatedPageHeader({
                 data-testid="page-live-link"
                 title="View live Page on Facebook"
                 aria-label={`View ${page.pageName} live on Facebook`}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  textDecoration: 'none',
-                  transition: 'color 0.15s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = `var(--text-dim, ${THEME.default.text.muted})`;
-                }}
+                className="inline-flex size-11 items-center justify-center text-ink-dim transition-colors hover:text-ink"
               >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                  <polyline points="15 3 21 3 21 9" />
-                  <line x1="10" y1="14" x2="21" y2="3" />
-                </svg>
+                <ExternalLinkIcon className="size-4" aria-hidden />
               </a>
             </div>
 
-            {/* Sub-row: Unboxed Status Signal + Account info + Followers (Zero bullet dots) */}
-            {renderDedicatedSubtitle(
-              page,
-              statusInfo.statusSignal,
-              statusInfo.statusLabel
-            )}
+            {/* Sub-row: status (colour + icon + text) + account + followers + category */}
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-body text-ink-sub">
+              <span data-testid="dedicated-page-status" className="inline-flex items-center">
+                <StatusDot status={statusInfo.status} label={statusInfo.statusLabel} />
+              </span>
+
+              {page.accountDisplayName && (
+                <>
+                  <span aria-hidden className="h-3 w-px shrink-0 bg-line" />
+                  <span>Connected via {page.accountDisplayName}</span>
+                </>
+              )}
+
+              {typeof page.currentFollowers === 'number' && (
+                <>
+                  <span aria-hidden className="h-3 w-px shrink-0 bg-line" />
+                  <span>{page.currentFollowers.toLocaleString('en-US')} followers</span>
+                </>
+              )}
+
+              {page.category && (
+                <>
+                  <span aria-hidden className="h-3 w-px shrink-0 bg-line" />
+                  <span>{page.category}</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Right Side: Uniform 34px Action Buttons Cluster */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.sm,
-            flexWrap: 'wrap',
-          }}
-        >
-          {/* Automation status text (the switch lives in Settings) */}
+        {/* Actions cluster */}
+        <div className="flex flex-wrap items-center gap-2">
           <span
             data-testid="header-automation-status"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              height: '34px',
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.medium,
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            }}
+            className="inline-flex h-11 items-center text-body font-medium text-ink-sub"
           >
             {statusInfo.isPaused ? 'Automation off' : 'Automation on'}
           </span>
 
-          {/* Primary Action: Queue Post (34px height) */}
-          <button
-            type="button"
-            data-testid="header-add-queue-btn"
-            onClick={onOpenAddQueue}
-            style={{
-              ...COMPONENT_STYLES.primaryButton,
-              height: '34px',
-              padding: `0 ${SPACING.md}`,
-              color: PALETTE.background,
-              border: `1px solid ${PALETTE.primary}`,
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
-              transition: 'transform 0.12s ease, box-shadow 0.12s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-1px)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
+          <Button type="button" data-testid="header-add-queue-btn" onClick={onOpenAddQueue}>
+            <PlusIcon aria-hidden />
             <span>Queue Post</span>
-          </button>
+          </Button>
 
-          {/* More Actions Dropdown (34x34px) */}
-          {renderPageMoreMenu({
-            dropdownRef,
-            isDropdownOpen,
-            setIsDropdownOpen,
-            hasCopiedId,
-            handleCopyId,
-            fbPageUrl,
-            onDisconnectRequest,
-          })}
+          <Menu>
+            <MenuTrigger asChild>
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                data-testid="header-settings-dropdown-btn"
+                aria-label="Page actions menu"
+              >
+                <MoreVerticalIcon aria-hidden />
+              </Button>
+            </MenuTrigger>
+            <MenuContent align="end">
+              <MenuItem data-testid="header-menu-copy-id-btn" onSelect={() => void handleCopyId()}>
+                <CopyIcon aria-hidden />
+                <span>{hasCopiedId ? 'Page ID Copied' : 'Copy Page ID'}</span>
+              </MenuItem>
+              <MenuItem asChild>
+                <a href={fbPageUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLinkIcon aria-hidden />
+                  <span>Open on Facebook</span>
+                </a>
+              </MenuItem>
+              <MenuSeparator />
+              <MenuItem
+                variant="destructive"
+                data-testid="header-menu-disconnect-btn"
+                onSelect={onDisconnectRequest}
+              >
+                <PowerIcon aria-hidden />
+                <span>Disconnect Page</span>
+              </MenuItem>
+            </MenuContent>
+          </Menu>
         </div>
       </div>
     </div>

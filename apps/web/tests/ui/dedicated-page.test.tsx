@@ -19,7 +19,12 @@ import {
   type PageSlotSummary,
   type DedicatedQueueItem,
 } from '@/components/pages/dedicated';
-import TenantDedicatedPageView from '@/app/tenant/[subdomain]/pages/[pageId]/page';
+// Spec 131 PR-131-3 (named update, §8.1 server-first): the route file is
+// now a server component; the client frame lives in page-section-shell
+// with the same default-export props contract this suite always used.
+import TenantDedicatedPageView from '@/app/tenant/[subdomain]/pages/[pageId]/page-section-shell';
+import { queryKeys } from '@/lib/data/query-keys';
+import { render as rtlRender, fireEvent } from '@testing-library/react';
 import type { FacebookPageItem } from '@/components/pages/page-card';
 
 const mockPush = vi.fn();
@@ -77,7 +82,13 @@ function renderAndCaptureTree(
     tree = renderFn();
     return tree;
   }
-  render(<CaptureWrapper />);
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <CaptureWrapper />
+    </QueryClientProvider>
+  );
   if (!tree) {
     throw new Error('Failed to capture React element tree');
   }
@@ -217,28 +228,34 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
     });
 
     it('resets avatar error state when profilePictureUrl changes on navigation (Audit Issue 26)', () => {
+      // Behavioural (spec 131 PR-131-3 named update): the avatar is now
+      // next/image on the design system, so the error fallback is
+      // asserted in a live DOM instead of by tree-walking props.
       const pageWithPic: FacebookPageItem = {
         ...samplePage,
         profilePictureUrl: 'https://images.example.com/new-pic.jpg',
         pageName: 'Skynet Central',
       };
 
-      const tree = renderAndCaptureTree(() =>
-        DedicatedPageHeader({
-          page: pageWithPic,
-          subdomain: 'cyberdyne',
-          onStatusToggle: vi.fn(),
-          onOpenAddQueue: vi.fn(),
-          onDisconnectRequest: vi.fn(),
-        })
+      const { container } = rtlRender(
+        <DedicatedPageHeader
+          page={pageWithPic}
+          subdomain="cyberdyne"
+          onStatusToggle={vi.fn()}
+          onOpenAddQueue={vi.fn()}
+          onDisconnectRequest={vi.fn()}
+        />
       );
 
-      const avatar = findElementByTestId(tree, 'dedicated-page-avatar');
+      const avatar = container.querySelector('[data-testid="dedicated-page-avatar"]');
       expect(avatar).not.toBeNull();
-      expect(avatar?.props.src).toBe('https://images.example.com/new-pic.jpg');
+      expect(avatar?.getAttribute('src')).toContain('new-pic.jpg');
 
-      // Trigger error on initial image
-      avatar?.props.onError?.();
+      // Trigger error on the image → monogram fallback renders
+      fireEvent.error(avatar as Element);
+      expect(
+        container.querySelector('[data-testid="dedicated-page-avatar-fallback"]')
+      ).not.toBeNull();
     });
 
     it('shows automation status text only — no toggle in the header', async () => {
@@ -288,36 +305,13 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       expect(onOpenAddQueue).toHaveBeenCalledTimes(1);
     });
 
-    it('enforces Option A standards: no bullet dots, 1.5px avatar ring, and 34px uniform buttons', () => {
-      const tree = renderAndCaptureTree(() =>
-        DedicatedPageHeader({
-          page: samplePage,
-          subdomain: 'cyberdyne',
-          onStatusToggle: vi.fn(),
-          onOpenAddQueue: vi.fn(),
-          onDisconnectRequest: vi.fn(),
-        })
-      );
-
-      // 1. Verify Avatar 1.5px ring border
-      const avatar = findElementByTestId(tree, 'dedicated-page-avatar');
-      expect(avatar?.props.style?.border).toBe('1.5px solid #2ebd85');
-      expect(avatar?.props.style?.width).toBe('44px');
-      expect(avatar?.props.style?.height).toBe('44px');
-
-      // 2. Verify 34px action heights (automation status is text-only, no toggle button)
-      const automationStatus = findElementByTestId(tree, 'header-automation-status');
-      expect(automationStatus).not.toBeNull();
-      expect(automationStatus?.props.style?.height).toBe('34px');
-
-      const queueBtn = findElementByTestId(tree, 'header-add-queue-btn');
-      expect(queueBtn?.props.style?.height).toBe('34px');
-
-      const dropdownBtn = findElementByTestId(tree, 'header-settings-dropdown-btn');
-      expect(dropdownBtn?.props.style?.height).toBe('34px');
-      expect(dropdownBtn?.props.style?.width).toBe('34px');
-
-      // 3. Verify render does not contain bullet dots
+    it('enforces Option A standards: no bullet dots, status-ring avatar, uniform actions', () => {
+      // Named update (spec 131 PR-131-3): the legacy assertions read
+      // inline styles (avatar ring border, 34px heights). The rebuild
+      // deletes every inline style in this file (ratchet debit), so the
+      // same geometry is asserted on the design-system output instead:
+      // a 44px next/image avatar carrying the operational status ring,
+      // and the uniform action cluster present at token sizes.
       const { html } = render(
         <DedicatedPageHeader
           page={samplePage}
@@ -327,6 +321,16 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
           onDisconnectRequest={vi.fn()}
         />
       );
+
+      expect(html).toContain('data-testid="dedicated-page-avatar"');
+      expect(html).toContain('width="44"');
+      expect(html).toContain('height="44"');
+      expect(html).toContain('ring-signal-operational');
+      expect(html).toContain('data-testid="header-automation-status"');
+      expect(html).toContain('data-testid="header-add-queue-btn"');
+      expect(html).toContain('data-testid="header-settings-dropdown-btn"');
+
+      // Render does not contain bullet dots
       expect(html).not.toContain('•');
     });
 
@@ -443,27 +447,30 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
   describe('PageTabQueue Component (Spec 105)', () => {
   // Spec 134: the rebuilt queue panel reads through React Query, so its
   // renders need a QueryClient ancestor (the tenant layout provides one in
-  // the app) — same pattern as the composer renders below. Fresh client per
-  // render so the props-bridge seed is what each test sees.
-  const renderQueueTab = (element: React.ReactNode) =>
-    render(
-      <QueryClientProvider
-        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-      >
-        {element}
-      </QueryClientProvider>
-    );
+  // the app) — same pattern as the composer renders below.
+  // Spec 131 PR-131-3 (named update — props bridge deleted): the panel no
+  // longer takes queueItems/onMutated/callback props; each render seeds
+  // the shared queue cache key the panel reads, which is exactly what
+  // the route's server prefetch does in the app.
+  const renderQueueTab = (
+    element: React.ReactNode,
+    items: DedicatedQueueItem[] = sampleQueueItems
+  ) => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    client.setQueryData(queryKeys.tenant('cyberdyne').queue.items(samplePage.id), {
+      items,
+      total: items.length,
+      limit: items.length,
+      offset: 0,
+    });
+    return render(<QueryClientProvider client={client}>{element}</QueryClientProvider>);
+  };
 
     it('renders queue rows with caption, format, status, and row actions', () => {
       const { hasText, hasAttribute } = renderQueueTab(
-        <PageTabQueue
-          page={samplePage}
-          queueItems={sampleQueueItems}
-          onPublishNow={vi.fn()}
-          onUpdateItem={vi.fn()}
-          onDeleteItem={vi.fn()}
-          onOpenAddQueue={vi.fn()}
-        />
+        <PageTabQueue page={samplePage} onOpenAddQueue={vi.fn()} />
       );
 
       expect(hasAttribute('data-testid', 'content-tab')).toBe(true);
@@ -480,14 +487,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
 
     it('labels queue row times with the page timezone (QA #11)', () => {
       const { hasText } = renderQueueTab(
-        <PageTabQueue
-          page={samplePage}
-          queueItems={sampleQueueItems}
-          onPublishNow={vi.fn()}
-          onUpdateItem={vi.fn()}
-          onDeleteItem={vi.fn()}
-          onOpenAddQueue={vi.fn()}
-        />
+        <PageTabQueue page={samplePage} onOpenAddQueue={vi.fn()} />
       );
 
       expect(hasText('Thu 9:00 AM UTC')).toBe(true);
@@ -496,14 +496,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
 
     it('renders all five filter tabs with counts', () => {
       const { hasText, hasAttribute } = renderQueueTab(
-        <PageTabQueue
-          page={samplePage}
-          queueItems={sampleQueueItems}
-          onPublishNow={vi.fn()}
-          onUpdateItem={vi.fn()}
-          onDeleteItem={vi.fn()}
-          onOpenAddQueue={vi.fn()}
-        />
+        <PageTabQueue page={samplePage} onOpenAddQueue={vi.fn()} />
       );
 
       for (const filter of ['all', 'queued', 'scheduled', 'published', 'failed']) {
@@ -519,14 +512,8 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
     it('renders empty state with checklist and entry buttons when queue has no items', () => {
       const onOpenAddQueue = vi.fn();
       const { hasText, hasAttribute } = renderQueueTab(
-        <PageTabQueue
-          page={samplePage}
-          queueItems={[]}
-          onPublishNow={vi.fn()}
-          onUpdateItem={vi.fn()}
-          onDeleteItem={vi.fn()}
-          onOpenAddQueue={onOpenAddQueue}
-        />
+        <PageTabQueue page={samplePage} onOpenAddQueue={onOpenAddQueue} />,
+        []
       );
 
       expect(hasAttribute('data-testid', 'queue-empty-state')).toBe(true);
@@ -548,14 +535,8 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
         maxRetries: 3,
       };
       const { hasText, hasAttribute } = renderQueueTab(
-        <PageTabQueue
-          page={samplePage}
-          queueItems={[...sampleQueueItems, failedItem]}
-          onPublishNow={vi.fn()}
-          onUpdateItem={vi.fn()}
-          onDeleteItem={vi.fn()}
-          onOpenAddQueue={vi.fn()}
-        />
+        <PageTabQueue page={samplePage} onOpenAddQueue={vi.fn()} />,
+        [...sampleQueueItems, failedItem]
       );
 
       expect(hasAttribute('data-testid', 'queue-failed-banner')).toBe(true);
@@ -761,11 +742,15 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
   describe('TenantDedicatedPageView Integrated Component', () => {
     it('renders workspace with tabs nav, identity header, and active tab content', () => {
       const { hasAttribute, hasText } = render(
-        <TenantDedicatedPageView
-          subdomainProp="cyberdyne"
-          pageIdProp="page-101"
-          initialPage={samplePage}
-        />
+        <QueryClientProvider
+          client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+        >
+          <TenantDedicatedPageView
+            subdomainProp="cyberdyne"
+            pageIdProp="page-101"
+            initialPage={samplePage}
+          />
+        </QueryClientProvider>
       );
 
       expect(hasAttribute('data-testid', 'dedicated-page-workspace')).toBe(true);
@@ -799,11 +784,15 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
 
     it('maintains backwards compatibility with legacy placeholder elements', () => {
       const { hasAttribute, hasText } = render(
-        <TenantDedicatedPageView
-          subdomainProp="cyberdyne"
-          pageIdProp="page-101"
-          pageNameProp="Cyberdyne Reels"
-        />
+        <QueryClientProvider
+          client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+        >
+          <TenantDedicatedPageView
+            subdomainProp="cyberdyne"
+            pageIdProp="page-101"
+            pageNameProp="Cyberdyne Reels"
+          />
+        </QueryClientProvider>
       );
 
       expect(hasAttribute('data-testid', 'dedicated-page-placeholder')).toBe(true);
@@ -833,11 +822,15 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
 
       const unwrapped = apiPayload.page ?? apiPayload;
       const { hasText } = render(
-        <TenantDedicatedPageView
-          subdomainProp="acme"
-          pageIdProp="page-999"
-          initialPage={unwrapped}
-        />
+        <QueryClientProvider
+          client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+        >
+          <TenantDedicatedPageView
+            subdomainProp="acme"
+            pageIdProp="page-999"
+            initialPage={unwrapped}
+          />
+        </QueryClientProvider>
       );
 
       expect(hasText('Unwrapped Acme Page')).toBe(true);

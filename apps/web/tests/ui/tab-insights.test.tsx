@@ -1,15 +1,30 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import React from 'react';
-import { renderToString } from 'react-dom/server';
-import {
-  PageTabInsights,
-  getCachedInsights,
-  setCachedInsights,
-  INSIGHTS_CACHE_TTL_MS,
-} from '../../src/components/pages/dedicated/tab-insights';
-import type { PageInsightsResponse } from '@fbuploadpro/contracts';
+/**
+ * @file tab-insights.test.tsx
+ * @description Behavioural tests for the rebuilt PageTabInsights
+ * (spec 131 PR-131-3).
+ *
+ * NAMED UPDATE (spec §8.6 / §6.4 deviation 2): the previous suite tested
+ * the localStorage insights cache (`getCachedInsights` /
+ * `setCachedInsights` / `INSIGHTS_CACHE_TTL_MS`). That cache is DELETED
+ * — server-owned data never lives in localStorage (spec 137 §3.9). The
+ * suite now proves the replacement behaviour: insights load through
+ * the React Query data layer (typed client + zod schema), freshness is
+ * the query's 5-minute staleTime plus the explicit Sync refetch with
+ * `refresh=true`, failures surface in an error banner with Retry, and
+ * NO localStorage access happens at any point.
+ */
 
-const mockPage = {
+import React from 'react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+import { PageTabInsights } from '@/components/pages/dedicated/tab-insights';
+import type { FacebookPageItem } from '@/components/pages/page-card';
+import type { PageInsightsResponse } from '@/lib/api/schemas/pages';
+
+const mockPage: FacebookPageItem = {
   id: 'page_12345',
   facebookAccountId: 'acc_1',
   accountDisplayName: 'Alex Account',
@@ -19,7 +34,7 @@ const mockPage = {
   startingFollowers: 1000,
   currentFollowers: 12000,
   followersGained: 11000,
-  status: 'active' as const,
+  status: 'active',
   createdAt: '2026-10-01T00:00:00.000Z',
 };
 
@@ -50,15 +65,7 @@ const mockInsightsData: PageInsightsResponse = {
       videoViewTimeMinutes: 240,
     },
   ],
-  reactions: {
-    like: 2500,
-    love: 800,
-    wow: 200,
-    haha: 150,
-    sorry: 50,
-    anger: 20,
-    total: 3720,
-  },
+  reactions: { like: 2500, love: 800, wow: 200, haha: 150, sorry: 50, anger: 20, total: 3720 },
   demographics: {
     topCountries: [{ name: 'United States', count: 6000, percentage: 50 }],
     topCities: [{ name: 'New York, NY', count: 2000, percentage: 33.3 }],
@@ -66,123 +73,133 @@ const mockInsightsData: PageInsightsResponse = {
   healthStatus: 'active',
 };
 
-describe('PageTabInsights Client-Side LocalStorage Caching (Spec 062)', () => {
-  let localStorageMock: Record<string, string> = {};
+const emptyInsightsData: PageInsightsResponse = {
+  ...mockInsightsData,
+  overview: {
+    pageName: 'Creator Hub Daily',
+    pageImage: null,
+    fanCount: 0,
+    followersCount: 0,
+    totalMediaViews: 0,
+    totalVideoViews: 0,
+    totalPostEngagements: 0,
+  },
+  timeSeries: [],
+  reactions: { like: 0, love: 0, wow: 0, haha: 0, sorry: 0, anger: 0, total: 0 },
+  demographics: { topCountries: [], topCities: [] },
+};
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function renderInsights() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: 0 } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <PageTabInsights page={mockPage} subdomain="acme" />
+    </QueryClientProvider>
+  );
+}
+
+describe('PageTabInsights — data-layer conversion (spec 131 PR-131-3)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  let getItemSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    localStorageMock = {};
-    const mockStorage = {
-      getItem: vi.fn((key: string) => localStorageMock[key] ?? null),
-      setItem: vi.fn((key: string, value: string) => {
-        localStorageMock[key] = value;
-      }),
-      removeItem: vi.fn((key: string) => {
-        delete localStorageMock[key];
-      }),
-      clear: vi.fn(() => {
-        localStorageMock = {};
-      }),
-    };
-    vi.stubGlobal('localStorage', mockStorage);
-    vi.stubGlobal('window', { localStorage: mockStorage });
+    fetchMock = vi.fn(async () => jsonResponse(mockInsightsData));
+    vi.stubGlobal('fetch', fetchMock);
+    getItemSpy = vi.spyOn(Storage.prototype, 'getItem');
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
-  describe('Cache TTL Constant', () => {
-    it('enforces 15-minute TTL (900,000 milliseconds)', () => {
-      expect(INSIGHTS_CACHE_TTL_MS).toBe(15 * 60 * 1000);
-      expect(INSIGHTS_CACHE_TTL_MS).toBe(900000);
-    });
+  it('loads insights through the typed data layer and renders KPIs, reactions, demographics', async () => {
+    renderInsights();
+
+    expect(await screen.findByTestId('insights-kpi-grid')).toBeVisible();
+    expect(screen.getByText('12,000')).toBeVisible();
+    expect(screen.getByText('42,000')).toBeVisible();
+    expect(screen.getByText('3,800')).toBeVisible();
+    expect(screen.getByText('3,720')).toBeVisible();
+    expect(screen.getByTestId('reactions-breakdown-card')).toBeVisible();
+    expect(screen.getByText('United States')).toBeVisible();
+    expect(screen.getByTestId('insights-updated-line').textContent).toContain('from Facebook');
+
+    const url = String(fetchMock.mock.calls[0]?.[0]);
+    expect(url).toContain('/api/tenant/acme/pages/page_12345/insights');
+    expect(url).toContain('range=28d');
   });
 
-  describe('getCachedInsights and setCachedInsights Helper Functions', () => {
-    it('saves insights in localStorage with 15-minute expiration timestamp', () => {
-      const now = 1000000;
-      vi.spyOn(Date, 'now').mockReturnValue(now);
+  it('never touches localStorage (the legacy cache is deleted, §8.6)', async () => {
+    renderInsights();
+    expect(await screen.findByTestId('insights-kpi-grid')).toBeVisible();
+    const calls = getItemSpy.mock.calls as unknown as unknown[][];
+    const insightsKeys = calls.filter((call) =>
+      String(call[0]).startsWith('insights:')
+    );
+    expect(insightsKeys).toHaveLength(0);
+  });
 
-      setCachedInsights(mockPage.id, '28d', mockInsightsData);
+  it('refetches with the new range when a range button is clicked', async () => {
+    const user = userEvent.setup();
+    renderInsights();
+    expect(await screen.findByTestId('insights-kpi-grid')).toBeVisible();
 
-      expect(localStorage.setItem).toHaveBeenCalledWith(
-        `insights:${mockPage.id}:28d`,
-        expect.stringContaining('"expiresAt":1900000') // 1000000 + 900000ms
-      );
-    });
-
-    it('returns cached data if still within 15-minute expiration window', () => {
-      const now = 1000000;
-      vi.spyOn(Date, 'now').mockReturnValue(now);
-      setCachedInsights(mockPage.id, '28d', mockInsightsData);
-
-      // Advance by 10 minutes (less than 15 min TTL)
-      vi.spyOn(Date, 'now').mockReturnValue(now + 10 * 60 * 1000);
-
-      const cached = getCachedInsights(mockPage.id, '28d');
-      expect(cached).toBeDefined();
-      expect(cached?.overview.followersCount).toBe(12000);
-      expect(cached?.fbPageId).toBe('fb_page_12345');
-    });
-
-    it('returns null if cached entry has expired (> 15 minutes)', () => {
-      const now = 1000000;
-      vi.spyOn(Date, 'now').mockReturnValue(now);
-      setCachedInsights(mockPage.id, '28d', mockInsightsData);
-
-      // Advance by 16 minutes (exceeds 15 min TTL)
-      vi.spyOn(Date, 'now').mockReturnValue(now + 16 * 60 * 1000);
-
-      const cached = getCachedInsights(mockPage.id, '28d');
-      expect(cached).toBeNull();
-    });
-
-    it('gracefully handles corrupted JSON in localStorage by removing the entry and returning null', () => {
-      localStorageMock[`insights:${mockPage.id}:28d`] = 'invalid-non-json';
-
-      const cached = getCachedInsights(mockPage.id, '28d');
-      expect(cached).toBeNull();
-      expect(localStorage.removeItem).toHaveBeenCalledWith(`insights:${mockPage.id}:28d`);
-    });
-
-    it('handles localStorage quota or security exception gracefully without throwing', () => {
-      const failingStorage = {
-        getItem: vi.fn(() => {
-          throw new Error('QuotaExceededError');
-        }),
-        setItem: vi.fn(() => {
-          throw new Error('QuotaExceededError');
-        }),
-        removeItem: vi.fn(),
-      };
-      vi.stubGlobal('localStorage', failingStorage);
-      vi.stubGlobal('window', { localStorage: failingStorage });
-
-      expect(() => setCachedInsights(mockPage.id, '28d', mockInsightsData)).not.toThrow();
-      expect(() => getCachedInsights(mockPage.id, '28d')).not.toThrow();
-      expect(getCachedInsights(mockPage.id, '28d')).toBeNull();
+    await user.click(screen.getByTestId('range-btn-7d'));
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(urls.some((u) => u.includes('range=7d'))).toBe(true);
     });
   });
 
-  describe('PageTabInsights Static Markup & Component Contract', () => {
-    it('renders initial skeleton loading markup on server / initial mount', () => {
-      const html = renderToString(<PageTabInsights page={mockPage} subdomain="acme" />);
+  it('Sync refetches with refresh=true', async () => {
+    const user = userEvent.setup();
+    renderInsights();
+    expect(await screen.findByTestId('insights-kpi-grid')).toBeVisible();
 
-      // Verify header controls exist
-      expect(html).toContain('data-testid="refresh-insights-btn"');
-      expect(html).toContain('Sync');
-      expect(html).toContain('28D');
-      expect(html).toContain('7D');
-      expect(html).toContain('14D');
-      expect(html).toContain('90D');
-      expect(html).toContain('data-testid="insights-loading"');
+    await user.click(screen.getByTestId('refresh-insights-btn'));
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(urls.some((u) => u.includes('refresh=true'))).toBe(true);
     });
+  });
 
-    it('renders component successfully without crashing', () => {
-      expect(() => {
-        renderToString(<PageTabInsights page={mockPage} subdomain="acme" />);
-      }).not.toThrow();
-    });
+  it('surfaces a load failure in the error banner with a Retry action', async () => {
+    fetchMock.mockImplementation(async () =>
+      jsonResponse({ error: 'Insights backend unavailable' }, 500)
+    );
+    renderInsights();
+
+    expect(await screen.findByTestId('insights-error-banner')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeVisible();
+  });
+
+  it('renders the typed empty state when the page has no insights yet', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse(emptyInsightsData));
+    renderInsights();
+
+    expect(await screen.findByTestId('insights-empty-state')).toBeVisible();
+    expect(
+      screen.getByText('Insights will appear here after your first posts publish.')
+    ).toBeVisible();
+  });
+
+  it('renders the controls bar with all four range buttons and Sync', async () => {
+    renderInsights();
+    for (const r of ['7d', '14d', '28d', '90d']) {
+      expect(screen.getByTestId(`range-btn-${r}`)).toBeVisible();
+    }
+    expect(screen.getByTestId('refresh-insights-btn')).toBeVisible();
+    expect(screen.getByText('Page Performance & Insights')).toBeVisible();
+    await screen.findByTestId('insights-kpi-grid');
   });
 });
