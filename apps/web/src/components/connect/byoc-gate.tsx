@@ -10,16 +10,16 @@
  * the connect action renders as normal (fail open — the Accounts-side
  * check in PR #641 behaves the same way, and the connect route re-checks
  * server-side anyway).
+ *
+ * Spec 131 PR-131-4: presentation rebuilt on the design system (Banner
+ * primitive + token-backed utilities, zero inline styles). Gating
+ * semantics are byte-equivalent to before (spec §6.2.2): the exported
+ * helpers, step copy, and check behaviour are unchanged.
  */
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import {
-  THEME,
-  RADII,
-  SPACING,
-  TYPOGRAPHY,
-  COMPONENT_STYLES,
-} from '@/lib/theme';
+
+import { Banner } from '@/components/shared/ui/banner';
 
 export type ByocGatePlatform = 'instagram' | 'threads';
 
@@ -72,49 +72,15 @@ export function ByocGatePrompt({
   const steps = setupSteps ?? defaultSetupSteps(platform);
   const settingsHref = `/tenant/${subdomain}/settings?tab=${platform}`;
   return (
-    <div
-      data-testid="byoc-gate-prompt"
-      style={{
-        padding: `${SPACING.md} ${SPACING.lg}`,
-        backgroundColor: 'rgba(250, 215, 52, 0.08)',
-        border: '1px solid rgba(250, 215, 52, 0.25)',
-        borderRadius: RADII.sm,
-        color: `var(--text-main, ${THEME.default.text.primary})`,
-        maxWidth: '560px',
-        textAlign: 'left',
-      }}
-    >
-      <p
-        data-testid="byoc-gate-title"
-        style={{
-          margin: 0,
-          fontSize: '0.9375rem',
-          fontWeight: TYPOGRAPHY.weights.semibold,
-        }}
-      >
-        Add your {platformName} app details first
-      </p>
-      <p
-        style={{
-          margin: `${SPACING.xs} 0 0 0`,
-          fontSize: '0.875rem',
-          lineHeight: 1.5,
-          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-        }}
-      >
-        Before you can connect {platformName} accounts, your workspace needs
-        its own {platformName} app details saved in Settings. It only takes a
-        few minutes:
-      </p>
+    <div data-testid="byoc-gate-prompt" className="max-w-140 text-left">
+      <Banner
+        variant="warning"
+        title={`Add your ${platformName} app details first`}
+        description={`Before you can connect ${platformName} accounts, your workspace needs its own ${platformName} app details saved in Settings. It only takes a few minutes:`}
+      />
       <ol
         data-testid="byoc-gate-steps"
-        style={{
-          margin: `${SPACING.sm} 0`,
-          paddingLeft: SPACING.lg,
-          fontSize: '0.875rem',
-          lineHeight: 1.6,
-          color: `var(--text-main, ${THEME.default.text.primary})`,
-        }}
+        className="my-2 flex flex-col gap-1 pl-6 text-body leading-relaxed text-ink"
       >
         {steps.map((step) => (
           <li key={step}>{step}</li>
@@ -123,18 +89,7 @@ export function ByocGatePrompt({
       <Link
         href={settingsHref}
         data-testid="byoc-gate-settings-link"
-        style={{
-          ...COMPONENT_STYLES.secondaryButton(),
-          textDecoration: 'none',
-          fontSize: '0.8125rem',
-          height: '32px',
-          padding: `0 ${SPACING.md}`,
-          display: 'inline-flex',
-          alignItems: 'center',
-          whiteSpace: 'nowrap',
-          color: `var(--text-main, ${THEME.default.text.primary})`,
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-        }}
+        className="inline-flex h-11 items-center justify-center rounded-sm border border-line bg-panel px-4 text-body font-medium text-ink shadow-card outline-none transition-colors hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold"
       >
         Add app details in Settings
       </Link>
