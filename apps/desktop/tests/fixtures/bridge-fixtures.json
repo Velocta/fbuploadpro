@@ -1,0 +1,1334 @@
+{
+  "commands": [
+    {
+      "command": "get_shell_info",
+      "validRequest": {},
+      "validResponse": {
+        "appName": "FBUploadPro Desktop",
+        "version": "0.1.0",
+        "bridgeVersion": "1.0.0",
+        "platform": "linux",
+        "arch": "x86_64",
+        "frameless": true,
+        "window": {
+          "defaultWidth": 1240,
+          "defaultHeight": 740,
+          "minWidth": 960,
+          "minHeight": 580
+        },
+        "capabilities": {
+          "filesystem": true,
+          "process": true,
+          "dialogs": true,
+          "secrets": true,
+          "artifacts": true,
+          "media": true,
+          "ai": true
+        }
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "shell_get_start_url",
+      "validRequest": {},
+      "validResponse": {
+        "url": "https://app.fbuploadpro.com/",
+        "source": "default",
+        "tenantSubdomain": null
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "shell_remember_tenant",
+      "validRequest": {
+        "subdomain": "acme"
+      },
+      "validResponse": {
+        "subdomain": "acme",
+        "stored": true
+      },
+      "invalidRequests": [
+        {
+          "subdomain": "Bad_Sub!"
+        },
+        {
+          "subdomain": ""
+        }
+      ]
+    },
+    {
+      "command": "shell_forget_tenant",
+      "validRequest": {},
+      "validResponse": {
+        "forgotten": true
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "shell_retry_connection",
+      "validRequest": {},
+      "validResponse": {
+        "reachable": true,
+        "url": "https://app.fbuploadpro.com/"
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "handle_window_action",
+      "validRequest": {
+        "action": "minimize"
+      },
+      "validResponse": {
+        "action": "minimize",
+        "applied": true,
+        "maximized": null
+      },
+      "invalidRequests": [
+        {
+          "action": "explode"
+        }
+      ]
+    },
+    {
+      "command": "open_external_url",
+      "validRequest": {
+        "url": "https://example.com"
+      },
+      "validResponse": {
+        "opened": true,
+        "url": "https://example.com"
+      },
+      "invalidRequests": [
+        {
+          "url": "file:///etc/passwd"
+        },
+        {
+          "url": "https://user:pass@example.com"
+        }
+      ]
+    },
+    {
+      "command": "dialog_open_file",
+      "validRequest": {
+        "title": "Pick",
+        "filters": [
+          {
+            "name": "Video",
+            "extensions": [
+              "mp4"
+            ]
+          }
+        ],
+        "multiple": false
+      },
+      "validResponse": {
+        "files": [
+          {
+            "path": "/tmp/a.mp4",
+            "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+            "name": "a.mp4"
+          }
+        ],
+        "cancelled": false
+      },
+      "invalidRequests": [
+        {
+          "filters": [
+            {
+              "name": "Video",
+              "extensions": [
+                ".mp4"
+              ]
+            }
+          ]
+        },
+        {
+          "filters": [
+            {
+              "name": "Video",
+              "extensions": [
+                "*"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "command": "dialog_open_directory",
+      "validRequest": {
+        "title": "Pick"
+      },
+      "validResponse": {
+        "directories": [
+          {
+            "path": "/tmp",
+            "scopeId": "scope-00000000-0000-4000-8000-000000000001"
+          }
+        ],
+        "cancelled": false
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "dialog_save_file",
+      "validRequest": {
+        "title": "Save",
+        "defaultName": "out.mp4"
+      },
+      "validResponse": {
+        "path": "/tmp/out.mp4",
+        "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "cancelled": false
+      },
+      "invalidRequests": [
+        {
+          "defaultName": "a/b.mp4"
+        }
+      ]
+    },
+    {
+      "command": "fs_scope_list",
+      "validRequest": {},
+      "validResponse": {
+        "scopes": [
+          {
+            "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+            "kind": "directory",
+            "path": "/tmp"
+          }
+        ]
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "fs_scope_revoke",
+      "validRequest": {
+        "scopeId": "scope-00000000-0000-4000-8000-000000000001"
+      },
+      "validResponse": {
+        "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "revoked": true
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "fs_list",
+      "validRequest": {
+        "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "relativePath": "clips"
+      },
+      "validResponse": {
+        "entries": [
+          {
+            "name": "a.mp4",
+            "relativePath": "clips/a.mp4",
+            "kind": "file",
+            "sizeBytes": 123,
+            "modifiedAt": null
+          }
+        ]
+      },
+      "invalidRequests": [
+        {
+          "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "relativePath": "../escape"
+        },
+        {
+          "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "relativePath": "/abs"
+        }
+      ]
+    },
+    {
+      "command": "fs_stat",
+      "validRequest": {
+        "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "relativePath": "a.mp4"
+      },
+      "validResponse": {
+        "kind": "file",
+        "sizeBytes": 123,
+        "modifiedAt": null,
+        "relativePath": "a.mp4"
+      },
+      "invalidRequests": [
+        {
+          "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "relativePath": "../x"
+        }
+      ]
+    },
+    {
+      "command": "fs_exists",
+      "validRequest": {
+        "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "relativePath": "a.mp4"
+      },
+      "validResponse": {
+        "exists": true
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "fs_read_text",
+      "validRequest": {
+        "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "relativePath": "notes.txt"
+      },
+      "validResponse": {
+        "content": "hello",
+        "truncated": false,
+        "sizeBytes": 5
+      },
+      "invalidRequests": [
+        {
+          "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "relativePath": "notes.txt",
+          "maxBytes": 99999999
+        }
+      ]
+    },
+    {
+      "command": "fs_write_text",
+      "validRequest": {
+        "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "relativePath": "notes.txt",
+        "content": "hello"
+      },
+      "validResponse": {
+        "relativePath": "notes.txt",
+        "sizeBytes": 5,
+        "overwritten": false
+      },
+      "invalidRequests": [
+        {
+          "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "relativePath": "../notes.txt",
+          "content": "x"
+        }
+      ]
+    },
+    {
+      "command": "fs_mkdir",
+      "validRequest": {
+        "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "relativePath": "clips"
+      },
+      "validResponse": {
+        "relativePath": "clips",
+        "created": true
+      },
+      "invalidRequests": [
+        {
+          "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "relativePath": "../clips"
+        }
+      ]
+    },
+    {
+      "command": "fs_delete",
+      "validRequest": {
+        "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "relativePath": "old.txt"
+      },
+      "validResponse": {
+        "relativePath": "old.txt",
+        "deleted": true
+      },
+      "invalidRequests": [
+        {
+          "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "relativePath": "../old.txt"
+        }
+      ]
+    },
+    {
+      "command": "fs_copy",
+      "validRequest": {
+        "sourceScopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "sourceRelativePath": "a.mp4",
+        "destScopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "destRelativePath": "b.mp4"
+      },
+      "validResponse": {
+        "destRelativePath": "b.mp4",
+        "sizeBytes": 123
+      },
+      "invalidRequests": [
+        {
+          "sourceScopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "sourceRelativePath": "../a.mp4",
+          "destScopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "destRelativePath": "b.mp4"
+        }
+      ]
+    },
+    {
+      "command": "fs_move",
+      "validRequest": {
+        "sourceScopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "sourceRelativePath": "a.mp4",
+        "destScopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "destRelativePath": "b.mp4"
+      },
+      "validResponse": {
+        "destRelativePath": "b.mp4",
+        "sizeBytes": 123
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "process_spawn",
+      "validRequest": {
+        "binaryId": "ffmpeg",
+        "args": [
+          "-version"
+        ],
+        "namespace": "clipper",
+        "jobId": "11111111-1111-4111-8111-111111111111"
+      },
+      "validResponse": {
+        "runId": "run-1",
+        "pid": 1234,
+        "binaryId": "ffmpeg",
+        "startedAt": "2026-10-24T00:00:00Z"
+      },
+      "invalidRequests": [
+        {
+          "binaryId": "ffmpeg",
+          "args": [
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x",
+            "x"
+          ]
+        },
+        {
+          "binaryId": "ffmpeg",
+          "args": [],
+          "env": {
+            "PATH": "/bin"
+          }
+        },
+        {
+          "binaryId": "ffmpeg",
+          "args": [],
+          "env": {
+            "MY_SECRET": "x"
+          }
+        },
+        {
+          "binaryId": "ffmpeg",
+          "args": [],
+          "timeoutMs": 500
+        },
+        {
+          "binaryId": "ffmpeg",
+          "args": [],
+          "namespace": "Bad NS"
+        },
+        {
+          "binaryId": "ffmpeg",
+          "args": [],
+          "jobId": "not-a-uuid"
+        }
+      ]
+    },
+    {
+      "command": "process_write_stdin",
+      "validRequest": {
+        "runId": "run-1",
+        "data": "y\n"
+      },
+      "validResponse": {
+        "runId": "run-1",
+        "written": true,
+        "closed": false
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "process_cancel",
+      "validRequest": {
+        "runId": "run-1"
+      },
+      "validResponse": {
+        "runId": "run-1",
+        "state": "cancelled",
+        "alreadyExited": false
+      },
+      "invalidRequests": [
+        {
+          "runId": "run-1",
+          "mode": "explode"
+        }
+      ]
+    },
+    {
+      "command": "process_status",
+      "validRequest": {
+        "runId": "run-1"
+      },
+      "validResponse": {
+        "runId": "run-1",
+        "state": "running",
+        "exitCode": null,
+        "startedAt": "2026-10-24T00:00:00Z",
+        "endedAt": null
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "process_list",
+      "validRequest": {},
+      "validResponse": {
+        "processes": [
+          {
+            "runId": "run-1",
+            "binaryId": "ffmpeg",
+            "state": "running",
+            "namespace": "clipper",
+            "jobId": "11111111-1111-4111-8111-111111111111",
+            "startedAt": "2026-10-24T00:00:00Z"
+          }
+        ]
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "binary_list",
+      "validRequest": {},
+      "validResponse": {
+        "artifacts": [
+          {
+            "artifactId": "yt-dlp",
+            "kind": "binary",
+            "state": "ready",
+            "version": "2025.01.01"
+          }
+        ]
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "binary_status",
+      "validRequest": {
+        "binaryId": "yt-dlp"
+      },
+      "validResponse": {
+        "artifact": {
+          "artifactId": "yt-dlp",
+          "kind": "binary",
+          "state": "ready",
+          "version": "2025.01.01"
+        }
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "binary_ensure",
+      "validRequest": {
+        "binaryId": "yt-dlp"
+      },
+      "validResponse": {
+        "artifact": {
+          "artifactId": "yt-dlp",
+          "kind": "binary",
+          "state": "ready",
+          "version": "2025.01.01"
+        }
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "binary_verify",
+      "validRequest": {
+        "binaryId": "yt-dlp"
+      },
+      "validResponse": {
+        "artifact": {
+          "artifactId": "yt-dlp",
+          "kind": "binary",
+          "state": "ready",
+          "version": "2025.01.01"
+        }
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "binary_remove",
+      "validRequest": {
+        "binaryId": "yt-dlp"
+      },
+      "validResponse": {
+        "artifact": {
+          "artifactId": "yt-dlp",
+          "kind": "binary",
+          "state": "missing",
+          "version": "2025.01.01"
+        }
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "binary_cancel_download",
+      "validRequest": {
+        "binaryId": "yt-dlp"
+      },
+      "validResponse": {
+        "artifact": {
+          "artifactId": "yt-dlp",
+          "kind": "binary",
+          "state": "ready",
+          "version": "2025.01.01"
+        }
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "sidecar_model_list",
+      "validRequest": {},
+      "validResponse": {
+        "artifacts": [
+          {
+            "artifactId": "whisper-base",
+            "kind": "model",
+            "state": "ready",
+            "version": "ggml-base"
+          }
+        ]
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "sidecar_model_status",
+      "validRequest": {
+        "modelId": "whisper-base"
+      },
+      "validResponse": {
+        "artifact": {
+          "artifactId": "whisper-base",
+          "kind": "model",
+          "state": "ready",
+          "version": "ggml-base"
+        }
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "sidecar_model_ensure",
+      "validRequest": {
+        "modelId": "whisper-base"
+      },
+      "validResponse": {
+        "artifact": {
+          "artifactId": "whisper-base",
+          "kind": "model",
+          "state": "ready",
+          "version": "ggml-base"
+        }
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "sidecar_model_remove",
+      "validRequest": {
+        "modelId": "whisper-base"
+      },
+      "validResponse": {
+        "artifact": {
+          "artifactId": "whisper-base",
+          "kind": "model",
+          "state": "missing",
+          "version": null
+        }
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "sidecar_model_cancel_download",
+      "validRequest": {
+        "modelId": "whisper-base"
+      },
+      "validResponse": {
+        "artifact": {
+          "artifactId": "whisper-base",
+          "kind": "model",
+          "state": "ready",
+          "version": "ggml-base"
+        }
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "secrets_set",
+      "validRequest": {
+        "service": "nicheforge",
+        "keyName": "ai",
+        "value": "sk-test"
+      },
+      "validResponse": {
+        "service": "nicheforge",
+        "keyName": "ai",
+        "stored": true
+      },
+      "invalidRequests": [
+        {
+          "service": "Bad!",
+          "keyName": "ai",
+          "value": "x"
+        },
+        {
+          "service": "nicheforge",
+          "keyName": "ai",
+          "value": ""
+        }
+      ]
+    },
+    {
+      "command": "secrets_get",
+      "validRequest": {
+        "service": "nicheforge",
+        "keyName": "ai"
+      },
+      "validResponse": {
+        "service": "nicheforge",
+        "keyName": "ai",
+        "value": "sk-test"
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "secrets_has",
+      "validRequest": {
+        "service": "nicheforge",
+        "keyName": "ai"
+      },
+      "validResponse": {
+        "service": "nicheforge",
+        "keyName": "ai",
+        "present": true
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "secrets_list",
+      "validRequest": {
+        "service": "nicheforge"
+      },
+      "validResponse": {
+        "service": "nicheforge",
+        "keyNames": [
+          "ai"
+        ]
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "secrets_delete",
+      "validRequest": {
+        "service": "nicheforge",
+        "keyName": "ai"
+      },
+      "validResponse": {
+        "service": "nicheforge",
+        "keyName": "ai",
+        "deleted": true
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "media_yt_dlp_metadata",
+      "validRequest": {
+        "url": "https://example.com/watch?v=abc"
+      },
+      "validResponse": {
+        "metadata": {
+          "title": "T",
+          "uploader": "U",
+          "durationSeconds": 10,
+          "thumbnailUrl": null,
+          "formats": [
+            {
+              "formatId": "18",
+              "ext": "mp4",
+              "resolution": "640x360",
+              "filesizeBytes": 123
+            }
+          ]
+        }
+      },
+      "invalidRequests": [
+        {
+          "url": "file:///x"
+        },
+        {
+          "url": "https://user:p@example.com/v"
+        }
+      ]
+    },
+    {
+      "command": "media_yt_dlp_subtitles",
+      "validRequest": {
+        "url": "https://example.com/watch?v=abc"
+      },
+      "validResponse": {
+        "subtitles": [
+          {
+            "language": "en",
+            "formats": [
+              "vtt"
+            ]
+          }
+        ],
+        "automaticCaptions": []
+      },
+      "invalidRequests": [
+        {
+          "url": "https://example.com/v",
+          "languages": [
+            "english"
+          ]
+        }
+      ]
+    },
+    {
+      "command": "media_yt_dlp_download",
+      "validRequest": {
+        "url": "https://example.com/watch?v=abc",
+        "outputScopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "outputTemplate": "%(title)s-%(id)s.%(ext)s"
+      },
+      "validResponse": {
+        "runId": "run-2",
+        "outputScopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "outputTemplate": "%(title)s-%(id)s.%(ext)s"
+      },
+      "invalidRequests": [
+        {
+          "url": "https://example.com/v",
+          "outputScopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "outputTemplate": "%(duration)s.%(ext)s"
+        },
+        {
+          "url": "https://example.com/v",
+          "outputScopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "outputTemplate": "../%(title)s.%(ext)s"
+        },
+        {
+          "url": "https://example.com/v",
+          "outputScopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "outputTemplate": "%(title)s.%(ext)s",
+          "formatSelector": "best; rm -rf"
+        }
+      ]
+    },
+    {
+      "command": "media_probe",
+      "validRequest": {
+        "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "relativePath": "a.mp4"
+      },
+      "validResponse": {
+        "durationSeconds": 10.5,
+        "formatName": "mp4",
+        "sizeBytes": 123,
+        "streams": [
+          {
+            "index": 0,
+            "codecType": "video",
+            "codecName": "h264",
+            "width": 1920,
+            "height": 1080
+          }
+        ]
+      },
+      "invalidRequests": [
+        {
+          "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "relativePath": "../a.mp4"
+        }
+      ]
+    },
+    {
+      "command": "media_convert",
+      "validRequest": {
+        "inputScopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "inputRelativePath": "a.mov",
+        "outputScopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "outputRelativePath": "b.mp4",
+        "video": {
+          "codec": "h264",
+          "width": 1280
+        },
+        "audio": {
+          "codec": "aac"
+        }
+      },
+      "validResponse": {
+        "runId": "run-3",
+        "outputScopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "outputRelativePath": "b.mp4"
+      },
+      "invalidRequests": [
+        {
+          "inputScopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "inputRelativePath": "a.mov",
+          "outputScopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "outputRelativePath": "b.mp4",
+          "video": {
+            "width": 99999
+          }
+        },
+        {
+          "inputScopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "inputRelativePath": "a.mov",
+          "outputScopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "outputRelativePath": "b.mp4",
+          "trim": {
+            "startSeconds": 10,
+            "endSeconds": 5
+          }
+        }
+      ]
+    },
+    {
+      "command": "media_transcribe",
+      "validRequest": {
+        "inputScopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "inputRelativePath": "a.mp4",
+        "modelId": "whisper-base",
+        "outputScopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "outputRelativePath": "a.srt"
+      },
+      "validResponse": {
+        "runId": "run-4",
+        "outputScopeId": "scope-00000000-0000-4000-8000-000000000001",
+        "outputRelativePath": "a.srt"
+      },
+      "invalidRequests": [
+        {
+          "inputScopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "inputRelativePath": "a.mp4",
+          "modelId": "whisper-base",
+          "outputScopeId": "scope-00000000-0000-4000-8000-000000000001",
+          "language": "english"
+        }
+      ]
+    },
+    {
+      "command": "ai_complete",
+      "validRequest": {
+        "service": "nicheforge",
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
+          }
+        ]
+      },
+      "validResponse": {
+        "output": "hello",
+        "model": "gpt-4o-mini",
+        "usage": {
+          "inputTokens": 5,
+          "outputTokens": 3
+        },
+        "finishReason": "stop"
+      },
+      "invalidRequests": [
+        {
+          "service": "nicheforge",
+          "provider": "openai",
+          "model": "gpt-4o-mini",
+          "messages": [
+            {
+              "role": "user",
+              "content": "hi"
+            }
+          ],
+          "apiKey": "sk-secret"
+        },
+        {
+          "service": "nicheforge",
+          "provider": "openai",
+          "model": "gpt-4o-mini",
+          "messages": [
+            {
+              "role": "user",
+              "content": "hi"
+            }
+          ],
+          "baseUrl": "https://evil.example"
+        },
+        {
+          "service": "nicheforge",
+          "provider": "openai-compatible",
+          "model": "gpt-4o-mini",
+          "messages": [
+            {
+              "role": "user",
+              "content": "hi"
+            }
+          ]
+        },
+        {
+          "service": "nicheforge",
+          "provider": "openai",
+          "model": "bad model!",
+          "messages": [
+            {
+              "role": "user",
+              "content": "hi"
+            }
+          ]
+        },
+        {
+          "service": "nicheforge",
+          "provider": "openai",
+          "model": "gpt-4o-mini",
+          "messages": []
+        }
+      ]
+    },
+    {
+      "command": "ai_complete_stream",
+      "validRequest": {
+        "service": "nicheforge",
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
+          }
+        ]
+      },
+      "validResponse": {
+        "requestId": "req-1"
+      },
+      "invalidRequests": [
+        {
+          "service": "nicheforge",
+          "provider": "openai",
+          "model": "gpt-4o-mini",
+          "messages": [
+            {
+              "role": "user",
+              "content": "hi"
+            }
+          ],
+          "token": "x"
+        }
+      ]
+    },
+    {
+      "command": "ai_cancel",
+      "validRequest": {
+        "requestId": "req-1"
+      },
+      "validResponse": {
+        "requestId": "req-1",
+        "cancelled": true
+      },
+      "invalidRequests": []
+    },
+    {
+      "command": "ai_status",
+      "validRequest": {
+        "service": "nicheforge"
+      },
+      "validResponse": {
+        "service": "nicheforge",
+        "hasKey": true
+      },
+      "invalidRequests": []
+    }
+  ],
+  "events": [
+    {
+      "event": "desktop:process:stdout",
+      "payload": {
+        "runId": "run-1",
+        "seq": 0,
+        "emittedAt": "2026-10-24T00:00:00Z",
+        "chunk": "hi"
+      }
+    },
+    {
+      "event": "desktop:process:stderr",
+      "payload": {
+        "runId": "run-1",
+        "seq": 0,
+        "emittedAt": "2026-10-24T00:00:00Z",
+        "chunk": "err"
+      }
+    },
+    {
+      "event": "desktop:process:exit",
+      "payload": {
+        "runId": "run-1",
+        "seq": 1,
+        "emittedAt": "2026-10-24T00:00:00Z",
+        "exitCode": 0,
+        "signal": null,
+        "reason": "completed"
+      }
+    },
+    {
+      "event": "desktop:artifact:progress",
+      "payload": {
+        "artifactId": "yt-dlp",
+        "kind": "binary",
+        "seq": 0,
+        "emittedAt": "2026-10-24T00:00:00Z",
+        "phase": "downloading",
+        "downloadedBytes": 10,
+        "totalBytes": 100,
+        "percent": 10
+      }
+    },
+    {
+      "event": "desktop:media:progress",
+      "payload": {
+        "runId": "run-2",
+        "seq": 0,
+        "emittedAt": "2026-10-24T00:00:00Z",
+        "phase": "downloading",
+        "percent": 50,
+        "detail": "50%",
+        "namespace": "clipper",
+        "jobId": "11111111-1111-4111-8111-111111111111"
+      }
+    },
+    {
+      "event": "desktop:media:done",
+      "payload": {
+        "runId": "run-2",
+        "seq": 1,
+        "emittedAt": "2026-10-24T00:00:00Z",
+        "status": "succeeded",
+        "outputs": [
+          {
+            "scopeId": "scope-00000000-0000-4000-8000-000000000001",
+            "relativePath": "a.mp4"
+          }
+        ]
+      }
+    },
+    {
+      "event": "desktop:ai:delta",
+      "payload": {
+        "requestId": "req-1",
+        "seq": 0,
+        "emittedAt": "2026-10-24T00:00:00Z",
+        "delta": "hel"
+      }
+    },
+    {
+      "event": "desktop:ai:done",
+      "payload": {
+        "requestId": "req-1",
+        "seq": 1,
+        "emittedAt": "2026-10-24T00:00:00Z",
+        "status": "succeeded",
+        "output": "hello",
+        "usage": {
+          "inputTokens": 5,
+          "outputTokens": 3
+        }
+      }
+    }
+  ],
+  "manifests": {
+    "valid": {
+      "artifactId": "yt-dlp",
+      "kind": "binary",
+      "version": "2025.01.01",
+      "description": "x",
+      "assets": [
+        {
+          "platform": "linux-x64",
+          "url": "https://example.com/yt-dlp",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "archiveKind": "none",
+          "binaryNames": [
+            "yt-dlp"
+          ]
+        }
+      ]
+    },
+    "invalid": [
+      {
+        "artifactId": "yt-dlp",
+        "kind": "binary",
+        "version": "latest",
+        "description": "x",
+        "assets": [
+          {
+            "platform": "linux-x64",
+            "url": "https://example.com/yt-dlp",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "archiveKind": "none"
+          }
+        ]
+      },
+      {
+        "artifactId": "yt-dlp",
+        "kind": "binary",
+        "version": "1.0",
+        "description": "x",
+        "assets": [
+          {
+            "platform": "linux-x64",
+            "url": "https://example.com/yt-dlp",
+            "sha256": "short",
+            "archiveKind": "none"
+          }
+        ]
+      },
+      {
+        "artifactId": "yt-dlp",
+        "kind": "binary",
+        "version": "1.0",
+        "description": "x",
+        "assets": [
+          {
+            "platform": "linux-x64",
+            "url": "http://example.com/yt-dlp",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "archiveKind": "none"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -98,14 +98,15 @@ describe('desktop contracts domain', () => {
   });
 
   it('dispatches window action via Tauri invoke', async () => {
-    const invokeMock = vi.fn().mockResolvedValue('ok');
+    // Spec 145 §7.3: success is the object { action, applied, maximized }, not a bare string/boolean.
+    const invokeMock = vi.fn().mockResolvedValue({ action: 'minimize', applied: true, maximized: null });
     (globalThis as any).window = {
       __TAURI_INTERNALS__: { invoke: invokeMock },
     };
     setNavigator({ userAgent: 'Mozilla/5.0 FBUploadProDesktop/0.1.0' });
 
     const result = await sendDesktopWindowAction('minimize');
-    expect(result).toBe(true);
+    expect(result).toEqual({ action: 'minimize', applied: true, maximized: null });
     expect(invokeMock).toHaveBeenCalledWith('handle_window_action', { action: 'minimize' });
   });
 
@@ -122,9 +123,9 @@ describe('desktop contracts domain', () => {
     (globalThis as any).window = { open: openMock };
     setNavigator({ userAgent: 'Chrome/130' });
 
-    // Standard web fallback
+    // Standard web fallback (spec 145 §7.3 object shape)
     const resWeb = await openExternalUrl('https://example.com');
-    expect(resWeb).toBe(true);
+    expect(resWeb).toEqual({ opened: true, url: 'https://example.com' });
     expect(openMock).toHaveBeenCalledWith('https://example.com', '_blank', 'noopener,noreferrer');
 
     // Rejects non-http schemes
@@ -132,14 +133,14 @@ describe('desktop contracts domain', () => {
     expect(await openExternalUrl('javascript:alert(1)')).toBe(false);
 
     // Tauri IPC invoke
-    const invokeMock = vi.fn().mockResolvedValue('ok');
+    const invokeMock = vi.fn().mockResolvedValue({ opened: true, url: 'https://facebook.com' });
     (globalThis as any).window = {
       __TAURI_INTERNALS__: { invoke: invokeMock },
     };
     setNavigator({ userAgent: 'Mozilla/5.0 FBUploadProDesktop/0.1.0' });
 
     const resDesktop = await openExternalUrl('https://facebook.com');
-    expect(resDesktop).toBe(true);
+    expect(resDesktop).toEqual({ opened: true, url: 'https://facebook.com' });
     expect(invokeMock).toHaveBeenCalledWith('open_external_url', { url: 'https://facebook.com' });
   });
 });

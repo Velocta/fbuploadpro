@@ -24,4 +24,6 @@ export const DESKTOP_SHELL_CONFIG: DesktopShellConfig = {
   minHeight: 580,
 };
 
+export * from './bridge.js';
+
 export const DESKTOP_TITLEBAR_HEIGHT = 36;
