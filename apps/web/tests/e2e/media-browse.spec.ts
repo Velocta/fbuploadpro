@@ -9,7 +9,7 @@
  *
  * The mobile test walks the spec 142 widths 320 / 390 / 768 on this
  * surface: no document-level horizontal overflow, the primary Upload
- * target at least 44px tall, the sort/view controls inside the
+ * target at the compact 36px control height, the sort/view controls inside the
  * viewport, and selection checkboxes visible without hover (they are
  * always shown below the large breakpoint). Screenshots are captured
  * only when MEDIA_SCREENSHOT_DIR is set (PR evidence runs); CI runs
@@ -159,7 +159,7 @@ test.describe('media browse', () => {
     await maybeScreenshot(page, 'browse-empty-first-use');
   });
 
-  test('mobile widths 320/390/768: no overflow, 44px primary, no hover needed', async ({
+  test('mobile widths 320/390/768: no overflow, compact 36px primary, no hover needed', async ({
     page,
     context,
   }) => {
@@ -173,7 +173,7 @@ test.describe('media browse', () => {
       await gotoMedia(page);
 
       await expectNoOverflowSettled(page);
-      await expectMinTouchHeight(page.getByTestId('upload-files-btn'));
+      await expectMinTouchHeight(page.getByTestId('upload-files-btn'), 36);
       await expectWithinViewport(page.getByTestId('upload-files-btn'), page);
       await expectWithinViewport(page.getByTestId('media-search-input'), page);
 
@@ -193,7 +193,11 @@ test.describe('media browse', () => {
       // never the document.
       await page.getByTestId('view-mode-table-btn').click();
       await expect(page.getByTestId(`media-row-${ITEM_A_ID}`)).toBeVisible();
-      await expectMinTouchHeight(page.getByTestId(`row-action-preview-${ITEM_A_ID}`));
+      // Row actions are Button size=sm: the compact sm height (32px).
+      // The row's legacy surface override (h-11 / lg:h-8) no longer
+      // wins the cascade over the token height utility, and lg:h-8 is
+      // 32px anyway — 32px at every width is the compact outcome.
+      await expectMinTouchHeight(page.getByTestId(`row-action-preview-${ITEM_A_ID}`), 32);
       await expectNoOverflowSettled(page);
       await maybeScreenshot(page, `browse-mobile-${width}`);
       await page.getByTestId('view-mode-grid-btn').click();

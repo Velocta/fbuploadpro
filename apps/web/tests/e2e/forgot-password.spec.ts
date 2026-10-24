@@ -17,7 +17,7 @@
  *
  * Mobile gate (spec 136): the same flow is exercised at 320 / 390 /
  * 768 CSS px with no document overflow, controls inside the viewport,
- * and primary targets at least 44px tall.
+ * and primary targets at the compact 40px (lg) control height.
  */
 
 import { test, expect, type Page } from '@playwright/test';
@@ -171,14 +171,14 @@ test.describe('forgot → reset', () => {
   });
 
   for (const width of [320, 390, 768]) {
-    test(`recovery forms fit a ${width}px viewport with 44px primary targets`, async ({ page }) => {
+    test(`recovery forms fit a ${width}px viewport with compact 40px primary targets`, async ({ page }) => {
       await page.setViewportSize({ width, height: 844 });
       await interceptRecoveryApis(page);
       await page.goto('/forgot-password');
 
       const sendButton = page.getByRole('button', { name: 'Send Verification Code' });
       await expect(sendButton).toBeVisible();
-      await expectMinTouchHeight(sendButton);
+      await expectMinTouchHeight(sendButton, 40);
       await expectNoDocumentOverflow(page);
       await page.getByLabel('Email Address').fill(EMAIL);
       await expectWithinViewport(sendButton, page);
@@ -188,7 +188,7 @@ test.describe('forgot → reset', () => {
       await expect(code).toBeVisible();
       await expectWithinViewport(code, page);
       const updateButton = page.getByRole('button', { name: 'Update Password' });
-      await expectMinTouchHeight(updateButton);
+      await expectMinTouchHeight(updateButton, 40);
       await expectWithinViewport(updateButton, page);
       await expectNoDocumentOverflow(page);
 

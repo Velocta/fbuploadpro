@@ -10,7 +10,7 @@
  * A second describe runs the palette at phone widths (390px, then
  * resized to 320px) and at 768px — the spec 142 mobile gate evidence
  * for this PR: the palette is a full-width sheet on phones (16px
- * gutters), rows are ≥44px targets, the header button stays
+ * gutters), rows are compact 36px targets, the header button stays
  * reachable, and the document never overflows horizontally.
  *
  * API traffic is fixture-served; the pool routes are registered
@@ -127,7 +127,7 @@ test.describe('⌘K command palette (spec 130 §5.9)', () => {
 test.describe('⌘K palette at small widths (spec 142 mobile gate)', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-  test('full-width sheet, ≥44px rows, no overflow at 390px and 320px', async ({ page }) => {
+  test('full-width sheet, compact 36px rows, no overflow at 390px and 320px', async ({ page }) => {
     await signInToTenantHome(page);
 
     const trigger = page.getByTestId('command-palette-trigger');
@@ -152,7 +152,7 @@ test.describe('⌘K palette at small widths (spec 142 mobile gate)', () => {
       const row = page.getByTestId('palette-item-go-home');
       const rowBox = await row.boundingBox();
       expect(rowBox).not.toBeNull();
-      if (rowBox) expect(rowBox.height).toBeGreaterThanOrEqual(44);
+      if (rowBox) expect(rowBox.height).toBeGreaterThanOrEqual(36);
     }
 
     // Tap a row navigates (no hover-only path).
@@ -160,7 +160,7 @@ test.describe('⌘K palette at small widths (spec 142 mobile gate)', () => {
     await expect(page).toHaveURL(new RegExp(`/tenant/${TENANT.subdomain}/media$`));
   });
 
-  test('palette at 768px: centred dialog inside the viewport, rows ≥44px', async ({ page }) => {
+  test('palette at 768px: centred dialog inside the viewport, rows at the compact 36px', async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 1024 });
     await signInToTenantHome(page);
     await page.getByTestId('command-palette-trigger').focus();
@@ -178,6 +178,6 @@ test.describe('⌘K palette at small widths (spec 142 mobile gate)', () => {
     ).toBeLessThanOrEqual(768);
     const rowBox = await page.getByTestId('palette-item-go-home').boundingBox();
     expect(rowBox).not.toBeNull();
-    if (rowBox) expect(rowBox.height).toBeGreaterThanOrEqual(44);
+    if (rowBox) expect(rowBox.height).toBeGreaterThanOrEqual(36);
   });
 });

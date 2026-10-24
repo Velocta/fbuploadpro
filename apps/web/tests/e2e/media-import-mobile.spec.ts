@@ -4,7 +4,7 @@
  * The rebuilt import dialog (staging → progress → completion summary)
  * is walked at the spec 142 widths 320 / 390 / 768 CSS px against the
  * fixture API: staging rows usable (row + remove target inside the
- * viewport, Start import a ≥44px target), no document-level overflow
+ * viewport, Start import a compact 36px target), no document-level overflow
  * with the dialog open at any step, and the completion summary
  * reachable. Screenshots are captured only when MEDIA_SCREENSHOT_DIR
  * is set (PR evidence runs); CI runs assertions only.
@@ -39,7 +39,7 @@ async function maybeScreenshot(page: Page, name: string): Promise<void> {
 }
 
 test.describe('media import — mobile widths', () => {
-  test('staging, progress and summary fit 320/390/768 with ≥44px targets', async ({
+  test('staging, progress and summary fit 320/390/768 with compact 36px targets', async ({
     page,
     context,
   }) => {
@@ -66,11 +66,12 @@ test.describe('media import — mobile widths', () => {
 
       const startImport = page.getByRole('button', { name: 'Start import (1)' });
       await expect(startImport).toBeEnabled();
-      await expectMinTouchHeight(startImport);
+      await expectMinTouchHeight(startImport, 36);
       await expectWithinViewport(startImport, page);
 
       const removeButtons = page.getByTestId(/^remove-staged-/);
-      await expectMinTouchHeight(removeButtons.first());
+      // Staging-row remove is an icon Button: the compact control height (36px).
+      await expectMinTouchHeight(removeButtons.first(), 36);
       await expectWithinViewport(removeButtons.first(), page);
       await maybeScreenshot(page, `import-staging-${width}`);
 
@@ -79,7 +80,7 @@ test.describe('media import — mobile widths', () => {
       const done = page.getByRole('button', { name: 'Done' });
       await expect(done).toBeVisible({ timeout: 30_000 });
       await expect(page.getByText('Import complete — 1 of 1 uploaded')).toBeVisible();
-      await expectMinTouchHeight(done);
+      await expectMinTouchHeight(done, 36);
       await expectWithinViewport(done, page);
       await expectNoOverflowSettled(page);
       await maybeScreenshot(page, `import-complete-${width}`);

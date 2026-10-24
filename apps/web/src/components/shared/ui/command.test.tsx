@@ -38,15 +38,15 @@ function TestCommand({ onSelect }: { onSelect: (value: string) => void }) {
 }
 
 describe("Command", () => {
-  it("renders groups, rows and shortcut hints; rows are 44px targets", () => {
+  it("renders groups, rows and shortcut hints; rows are 36px targets", () => {
     render(<TestCommand onSelect={() => {}} />);
     expect(screen.getByText("Go to")).toBeInTheDocument();
     const home = screen.getByRole("option", { name: /Home/ });
     expect(home).toBeInTheDocument();
-    expect(home.className).toContain("min-h-11");
+    expect(home.className).toContain("min-h-9");
     expect(screen.getByText("⌘B")).toBeInTheDocument();
     const input = screen.getByPlaceholderText("Search…");
-    expect(input.className).toContain("h-11");
+    expect(input.className).toContain("h-control");
   });
 
   it("filters with fuzzy matching and shows the empty state when nothing matches", async () => {

@@ -4,8 +4,9 @@
  *
  * The posting-times tab is exercised at the phone/tablet widths the
  * task names (320 / 390 / 768 CSS px): the slot row and its controls
- * render with no horizontal overflow, primary targets are at least
- * 44px tall, the Add posting-time dialog fits inside the viewport with
+ * render with no horizontal overflow, primary targets are compact
+ * 36px tall (compact default density — Shahzeb 2026-10-24, spec 129
+ * OD-4 as amended), the Add posting-time dialog fits inside the viewport with
  * its submit reachable, and the two-step timezone dialog is usable —
  * all against the intercepted fixture boundary (no real backend).
  */
@@ -55,11 +56,11 @@ test.describe('posting times — mobile gate (spec 142)', () => {
       await expect(page.getByTestId('posting-times-header')).toBeVisible();
       await expectNoHorizontalOverflow(page);
 
-      // Primary actions are ≥44px tall and tappable at this width.
+      // Primary actions are compact 36px tall and tappable at this width (compact default density — Shahzeb 2026-10-24, spec 129 OD-4 as amended).
       for (const testId of ['add-slot-button', 'schedule-timezone-trigger']) {
         const box = await page.getByTestId(testId).boundingBox();
         expect(box, `${testId} has a bounding box`).not.toBeNull();
-        expect(box!.height, `${testId} height`).toBeGreaterThanOrEqual(44);
+        expect(box!.height, `${testId} height`).toBeGreaterThanOrEqual(36);
       }
       // The Switch's layout box is 24px by design; its hit area is the
       // design system's hit-area-44 utility (a centred 44px ::after) —
@@ -80,7 +81,7 @@ test.describe('posting times — mobile gate (spec 142)', () => {
       await expectBoxInsideViewport(await formDialog.boundingBox(), viewport.width, 'form dialog');
       const saveBox = await page.getByTestId('save-slot-btn').boundingBox();
       expect(saveBox, 'save button has a bounding box').not.toBeNull();
-      expect(saveBox!.height, 'save button height').toBeGreaterThanOrEqual(44);
+      expect(saveBox!.height, 'save button height').toBeGreaterThanOrEqual(36);
       await expectNoHorizontalOverflow(page);
       await page.getByRole('button', { name: 'Cancel' }).click();
       await expect(formDialog).toBeHidden();

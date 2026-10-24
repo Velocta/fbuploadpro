@@ -12,8 +12,8 @@
  * posts now through the unified enqueue; with a covering posting slot
  * the queue intent goes out at the slot. Threads (PR-C4): a text post
  * with a topic tag posts through the same enqueue. The six-viewport
- * loops are the mobile gate: no horizontal overflow, ≥44px primary
- * targets.
+ * loops are the mobile gate: no horizontal overflow, compact 36px
+ * primary targets.
  */
 import { test, expect, type Page } from '@playwright/test';
 
@@ -226,14 +226,14 @@ test.describe('destination composer — Instagram (spec 132 PR-C3)', () => {
   });
 
   for (const width of [320, 360, 390, 430, 768, 1024]) {
-    test(`composer fits ${width}px with ≥44px primary targets`, async ({ page }) => {
+    test(`composer fits ${width}px with compact 36px primary targets`, async ({ page }) => {
       const state = seededState();
       await openDestination(page, state, []);
       await page.setViewportSize({ width, height: 900 });
 
       const openBtn = page.getByTestId('instagram-composer-open-btn');
       await expect(openBtn).toBeVisible();
-      expect((await openBtn.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+      expect((await openBtn.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(36);
       await openBtn.click();
       await expect(page.getByTestId('instagram-composer')).toBeVisible();
 
@@ -244,7 +244,7 @@ test.describe('destination composer — Instagram (spec 132 PR-C3)', () => {
         'instagram-composer-cancel-btn',
       ]) {
         const box = await page.getByTestId(testId).boundingBox();
-        expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+        expect(box?.height ?? 0).toBeGreaterThanOrEqual(36);
       }
       await expectNoHorizontalOverflow(page);
     });
@@ -335,14 +335,14 @@ test.describe('destination composer — Threads (spec 132 PR-C4)', () => {
   });
 
   for (const width of [320, 360, 390, 430, 768, 1024]) {
-    test(`composer fits ${width}px with ≥44px primary targets`, async ({ page }) => {
+    test(`composer fits ${width}px with compact 36px primary targets`, async ({ page }) => {
       const state = createFixtureState();
       await openThreadsDestination(page, state);
       await page.setViewportSize({ width, height: 900 });
 
       const openBtn = page.getByTestId('threads-composer-open-btn');
       await expect(openBtn).toBeVisible();
-      expect((await openBtn.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+      expect((await openBtn.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(36);
       await openBtn.click();
       await expect(page.getByTestId('threads-composer')).toBeVisible();
 
@@ -352,7 +352,7 @@ test.describe('destination composer — Threads (spec 132 PR-C4)', () => {
         'threads-composer-cancel-btn',
       ]) {
         const box = await page.getByTestId(testId).boundingBox();
-        expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+        expect(box?.height ?? 0).toBeGreaterThanOrEqual(36);
       }
       await expectNoHorizontalOverflow(page);
     });

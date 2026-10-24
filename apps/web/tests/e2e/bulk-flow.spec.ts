@@ -11,7 +11,7 @@
  * intercepted fixture boundary — nothing reaches Facebook.
  *
  * The mobile describe block is the spec 142 gate for this surface:
- * 320 / 390 / 768 CSS px — no horizontal overflow, ≥44px primary
+ * 320 / 390 / 768 CSS px — no horizontal overflow, compact 36px primary
  * targets, stepper + review usable one-handed.
  */
 
@@ -189,19 +189,19 @@ test.describe('bulk flow — mobile gate (spec 142)', () => {
       });
       expect(overflow).toBeLessThanOrEqual(0);
 
-      // Stepper + primary actions are ≥44px tall (touch band, spec 142 F01).
+      // Stepper + primary actions are compact 36px tall (compact default density — Shahzeb 2026-10-24, spec 129 OD-4 as amended; supersedes the spec 142 F01 44px touch band).
       for (const testId of ['bulk-step-1', 'bulk-continue-btn']) {
         const box = await bulk.getByTestId(testId).boundingBox();
         expect(box, `${testId} has a bounding box`).not.toBeNull();
-        expect(box!.height).toBeGreaterThanOrEqual(44);
+        expect(box!.height).toBeGreaterThanOrEqual(36);
       }
 
       // The whole flow works one-handed at this width: pick, continue
-      // twice, and the review submit is a ≥44px reachable target.
+      // twice, and the review submit is a compact 36px reachable target.
       await pickTwoAndReview(page);
       const submitBox = await bulk.getByTestId('bulk-submit-btn').boundingBox();
       expect(submitBox).not.toBeNull();
-      expect(submitBox!.height).toBeGreaterThanOrEqual(44);
+      expect(submitBox!.height).toBeGreaterThanOrEqual(36);
       const overflowAtReview = await page.evaluate(() => {
         const el = document.documentElement;
         return el.scrollWidth - el.clientWidth;

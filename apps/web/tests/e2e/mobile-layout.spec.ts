@@ -135,7 +135,7 @@ test.describe('mobile layout', () => {
  * (the same CSS bundle /login ships). That proves the geometry
  * contract those classes produce in a real browser: 16px gutters,
  * dvh-bounded height, internal scrolling, reachable footer actions,
- * and 44px targets. When a surface ships a shared Dialog, a
+ * and compact 36px targets (classes refreshed to the compact primitives, 2026-10-24). When a surface ships a shared Dialog, a
  * surface-owned case should supersede this harness.
  */
 test.describe('mobile layout — shared dialog geometry (PR-M142-1)', () => {
@@ -178,7 +178,7 @@ test.describe('mobile layout — shared dialog geometry (PR-M142-1)', () => {
       aria-modal="true"
       aria-labelledby="harness-dialog-title"
       data-slot="dialog-content"
-      class="fixed inset-x-4 top-1/2 z-dialog grid max-h-dvh -translate-y-1/2 gap-4 overflow-y-auto rounded-md border border-line bg-panel p-6 text-ink shadow-modal duration-base outline-none sm:right-auto sm:left-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2"
+      class="fixed inset-x-4 top-1/2 z-dialog grid max-h-dvh -translate-y-1/2 gap-4 overflow-y-auto rounded-md border border-line bg-panel p-5 text-ink shadow-modal duration-base outline-none sm:right-auto sm:left-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2"
     >
       <div data-slot="dialog-header" class="flex flex-col gap-2 text-left">
         <h2 id="harness-dialog-title" data-slot="dialog-title" class="text-lg leading-heading font-semibold">
@@ -190,10 +190,10 @@ test.describe('mobile layout — shared dialog geometry (PR-M142-1)', () => {
       </div>
       <div class="flex flex-col gap-3 text-body">${paragraphs}</div>
       <div data-slot="dialog-footer" class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <button type="button" data-slot="button" class="${buttonBase} border border-line bg-panel text-ink shadow-card hover:bg-hover h-11 px-4 py-2">
+        <button type="button" data-slot="button" class="${buttonBase} border border-line bg-panel text-ink shadow-card hover:bg-hover h-control px-3 py-2">
           Cancel
         </button>
-        <button type="button" data-slot="button" class="${buttonBase} bg-brand-rose text-neutral-white hover:bg-brand-rose/90 focus-visible:outline-brand-rose h-11 px-4 py-2">
+        <button type="button" data-slot="button" class="${buttonBase} bg-brand-rose text-neutral-white hover:bg-brand-rose/90 focus-visible:outline-brand-rose h-control px-3 py-2">
           Delete workspace
         </button>
       </div>
@@ -201,7 +201,7 @@ test.describe('mobile layout — shared dialog geometry (PR-M142-1)', () => {
         type="button"
         data-slot="dialog-close"
         aria-label="Close"
-        class="absolute top-1 right-1 inline-flex size-11 items-center justify-center rounded-sm text-ink-sub outline-none transition-colors hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold disabled:pointer-events-none"
+        class="absolute top-1 right-1 inline-flex size-9 items-center justify-center rounded-sm text-ink-sub outline-none transition-colors hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold disabled:pointer-events-none"
       >
         <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path d="M18 6 6 18"></path>
@@ -239,12 +239,12 @@ test.describe('mobile layout — shared dialog geometry (PR-M142-1)', () => {
     expect(scrollable, 'tall dialog content must overflow the panel internally').toBe(true);
     await expectNoDocumentOverflow(page);
 
-    // F05/F01: close and footer actions are 44px touch targets.
+    // F05/F01 as amended (compact default density — Shahzeb 2026-10-24, spec 129 OD-4 as amended): close and footer actions are compact 36px targets. The harness class copies above were refreshed to the current dialog.tsx / button.tsx classes in the same change.
     const close = page.getByRole('button', { name: 'Close' });
-    await expectMinTouchHeight(close);
+    await expectMinTouchHeight(close, 36);
     const closeBox = await close.boundingBox();
     if (!closeBox) throw new Error('dialog case: close button has no bounding box');
-    expect(closeBox.width, 'close target must be at least 44px wide').toBeGreaterThanOrEqual(44);
+    expect(closeBox.width, 'close target must be at least 36px wide').toBeGreaterThanOrEqual(36);
 
     // F04: after scrolling the panel, both footer actions are reachable
     // inside the panel and meet the touch minimum.
@@ -253,7 +253,7 @@ test.describe('mobile layout — shared dialog geometry (PR-M142-1)', () => {
     });
     for (const name of ['Cancel', 'Delete workspace']) {
       const action = page.getByRole('button', { name });
-      await expectMinTouchHeight(action);
+      await expectMinTouchHeight(action, 36);
       const box = await action.boundingBox();
       if (!box) throw new Error(`dialog case: ${name} has no bounding box`);
       expect(box.y, `${name} must be reachable inside the panel`).toBeGreaterThanOrEqual(

@@ -13,7 +13,7 @@
  * preview: at 320 / 390 / 768 CSS px the two-column layout collapses
  * to a single column on phones (media above metadata), the dialog
  * fits the viewport with no document overflow, the media is visibly
- * rendered, and the primary actions are at least 44px tall.
+ * rendered, and the primary actions are compact 36px tall.
  */
 
 import { test, expect, type Page } from '@playwright/test';
@@ -232,7 +232,7 @@ test.describe('media preview', () => {
 
   // One test per width (320 / 390 / 768) — the spec 142 mobile gate.
   for (const width of [320, 390, 768]) {
-    test(`preview at ${width}px: fits viewport, media visible, 44px actions, no overflow`, async ({
+    test(`preview at ${width}px: fits viewport, media visible, compact 36px actions, no overflow`, async ({
       page,
       context,
     }) => {
@@ -256,12 +256,12 @@ test.describe('media preview', () => {
       await expectRealPixels(page, 'modal-image-preview');
       await expect(page.getByTestId('modal-preview-placeholder')).toHaveCount(0);
 
-      // Primary actions meet the 44px touch minimum and are fully
+      // Primary actions meet the compact 36px minimum (compact default density — Shahzeb 2026-10-24, spec 129 OD-4 as amended) and are fully
       // inside the viewport (the footer stacks on phones — a clipped
       // Save button is a gate failure, not a cosmetic nit).
-      await expectMinTouchHeight(page.getByTestId('modal-save-caption-btn'));
-      await expectMinTouchHeight(page.getByTestId('modal-delete-media-btn'));
-      await expectMinTouchHeight(page.getByTestId('modal-filename-input'));
+      await expectMinTouchHeight(page.getByTestId('modal-save-caption-btn'), 36);
+      await expectMinTouchHeight(page.getByTestId('modal-delete-media-btn'), 36);
+      await expectMinTouchHeight(page.getByTestId('modal-filename-input'), 36);
       await expectWithinViewport(page.getByTestId('modal-save-caption-btn'), page);
       await expectWithinViewport(page.getByTestId('modal-delete-media-btn'), page);
 

@@ -292,12 +292,12 @@ describe('Command palette host (OD130-6 header trigger + chord)', () => {
     );
   }
 
-  it('renders the search-style header button with label and ⌘K hint at 44px', () => {
+  it('renders the search-style header button with label and ⌘K hint at the compact 36px control height', () => {
     renderHost();
     const trigger = screen.getByTestId('command-palette-trigger');
     expect(trigger).toHaveTextContent('Search…');
     expect(trigger).toHaveTextContent('⌘K');
-    expect(trigger.className).toContain('h-11');
+    expect(trigger.className).toContain('h-control');
   });
 
   it('Ctrl+K opens the palette; Esc closes it and focus returns to the invoker button', async () => {

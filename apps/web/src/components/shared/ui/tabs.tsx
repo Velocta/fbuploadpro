@@ -37,7 +37,7 @@ const tabsListVariants = cva(
   {
     variants: {
       variant: {
-        default: "h-13 rounded-md bg-subtle p-1",
+        default: "h-11 rounded-md bg-subtle p-1",
         line: "border-b border-line bg-transparent",
       },
     },
@@ -65,7 +65,7 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "inline-flex h-11 grow basis-0 shrink-0 items-center justify-center gap-1.5 rounded-sm border-b-2 border-transparent px-3 text-body font-medium whitespace-nowrap text-ink-sub transition-colors duration-fast outline-none hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-panel data-[state=active]:text-ink data-[state=active]:shadow-card",
+        "inline-flex h-9 grow basis-0 shrink-0 items-center justify-center gap-1.5 rounded-sm border-b-2 border-transparent px-3 text-body font-medium whitespace-nowrap text-ink-sub transition-colors duration-fast outline-none hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-panel data-[state=active]:text-ink data-[state=active]:shadow-card",
         className
       )}
       {...props}

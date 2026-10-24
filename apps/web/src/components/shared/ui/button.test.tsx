@@ -11,30 +11,30 @@ describe("Button", () => {
     expect(btn).toHaveAttribute("data-variant", "default");
     expect(btn.className).toContain("bg-primary");
     expect(btn.className).toContain("text-on-primary");
-    expect(btn.className).toContain("h-11");
+    expect(btn.className).toContain("h-control");
   });
 
-  it("spec 142 F01: default and icon sizes are 44px; sm/icon-sm stay dense 32px", () => {
+  it("compact default density (spec 129 OD-4 as amended, Shahzeb 2026-10-24 — supersedes spec 142 F01): default and icon sizes are the 36px control height; sm/icon-sm stay dense 32px", () => {
     const { rerender } = render(<Button>Publish</Button>);
-    expect(screen.getByRole("button", { name: "Publish" }).className).toContain("h-11");
+    expect(screen.getByRole("button", { name: "Publish" }).className).toContain("h-control");
     rerender(
       <Button size="icon" aria-label="More actions">
         …
       </Button>
     );
-    expect(screen.getByRole("button", { name: "More actions" }).className).toContain("size-11");
+    expect(screen.getByRole("button", { name: "More actions" }).className).toContain("size-control");
     rerender(
       <Button size="sm">Dense</Button>
     );
     const sm = screen.getByRole("button", { name: "Dense" });
-    expect(sm.className).toContain("h-8");
-    expect(sm.className).not.toContain("h-11");
+    expect(sm.className).toContain("h-control-sm");
+    expect(sm.className).not.toMatch(/(^|\s)h-control(\s|$)/);
     rerender(
       <Button size="icon-sm" aria-label="Dense icon">
         …
       </Button>
     );
-    expect(screen.getByRole("button", { name: "Dense icon" }).className).toContain("size-8");
+    expect(screen.getByRole("button", { name: "Dense icon" }).className).toContain("size-control-sm");
   });
 
   it("uses token classes only — no arbitrary values", () => {
