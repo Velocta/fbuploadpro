@@ -23,7 +23,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  *
  * History: this route family used to also CREATE items (POST here +
  * the bulk route beside it). Create moved to the unified destination
- * enqueue (spec 119 enabling backend, #756; composer retarget #759),
+ * enqueue (spec 119 enabling backend PR 756; composer retarget PR 759),
  * and no product caller posted here anymore — the POST handler and
  * the bulk route were deleted with the legacy schema drop rather
  * than repointed, so the atomic slot-claim RPC they depended on

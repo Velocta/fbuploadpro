@@ -214,7 +214,9 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
                 caption: 'Updated caption',
                 first_comment: 'Updated first comment',
                 // Unified storage: the wire 'skipped' PATCH writes
-                // 'cancelled'; the response maps it back to 'skipped'.
+                // 'cancelled' (the unified vocabulary has no
+                // 'skipped'); the response reports the stored
+                // unified status, 'cancelled'.
                 status: 'cancelled',
                 retry_count: 0,
                 max_retries: 3,
@@ -259,7 +261,7 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
       expect(data.caption).toBe('Updated caption');
       expect(data.firstComment).toBe('Updated first comment');
       expect(data.scheduledTime).toBe(updatedTime);
-      expect(data.status).toBe('skipped');
+      expect(data.status).toBe('cancelled');
       expect(data.media).toBeDefined();
       expect(data.media.name).toBe('video.mp4');
     });
