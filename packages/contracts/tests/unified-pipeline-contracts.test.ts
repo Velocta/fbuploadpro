@@ -7,7 +7,6 @@ import {
   PublishOutcomeSchema,
   PublishQueueMessageSchema,
   type ClaimedUnifiedQueueItemRpcResult,
-  type ClaimDueQueueItemsLegacyArgs,
   type ClaimDueQueueItemsUnifiedArgs,
   type Database,
   type DatabaseDestinationRow,
@@ -19,7 +18,6 @@ import {
   type PublishQueueMessage,
   type PublishQueueMessageInput,
   type RecoverStuckPublishingItemsUnifiedArgs,
-  type SettleQueueItemOutcomeLegacyArgs,
   type SettleQueueItemOutcomeUnifiedArgs,
 } from '../src/index.js';
 
@@ -102,15 +100,22 @@ const recoverReturnsNumber: Equals<
   number
 > = true;
 
-// Legacy overload typings are retained (the RPCs still exist, locked by
-// spec 117 and re-pointed at the legacy tables by spec 120).
-const legacyClaimArgsRetained: Equals<
-  ClaimDueQueueItemsLegacyArgs,
-  { p_limit?: number; p_max_per_page?: number }
-> = true;
-const legacySettleKeepsNumericCodes: Equals<
-  SettleQueueItemOutcomeLegacyArgs['p_error_code'],
-  number | null | undefined
+// The pre-unification overload typings are GONE (Phase 7 drop,
+// migration 20261024130000): Database.Tables carries exactly the
+// surviving unified table set — no legacy table entries remain.
+type Tables = Database['public']['Tables'];
+const tablesAreUnifiedOnly: Equals<
+  keyof Tables,
+  | 'users'
+  | 'workspaces'
+  | 'media_folders'
+  | 'media_items'
+  | 'platform_credentials'
+  | 'social_accounts'
+  | 'destinations'
+  | 'posting_slots'
+  | 'queue_items'
+  | 'publish_logs'
 > = true;
 
 describe('RPC typing parity (type-level, asserted at compile time)', () => {
@@ -124,8 +129,7 @@ describe('RPC typing parity (type-level, asserted at compile time)', () => {
     expect(recoverFunctionsArgsAreUnified).toBe(true);
     expect(recoverArgsMatchMigration).toBe(true);
     expect(recoverReturnsNumber).toBe(true);
-    expect(legacyClaimArgsRetained).toBe(true);
-    expect(legacySettleKeepsNumericCodes).toBe(true);
+    expect(tablesAreUnifiedOnly).toBe(true);
   });
 
   it('schema-inferred row/message types keep the expected field vocabularies', () => {
@@ -305,8 +309,8 @@ describe('DatabaseSocialAccountRowSchema', () => {
     );
   });
 
-  it('rejects the legacy facebook_accounts status vocabulary', () => {
-    // facebook_accounts 'disconnected' backfilled to 'revoked' in social_accounts.
+  it('rejects the pre-unification account status vocabulary', () => {
+    // The old account table's 'disconnected' backfilled to 'revoked' in social_accounts.
     expect(
       DatabaseSocialAccountRowSchema.safeParse({ ...validSocialAccountRow, status: 'disconnected' })
         .success

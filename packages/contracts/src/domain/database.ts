@@ -21,53 +21,6 @@ export interface DatabaseWorkspaceRow {
   updated_at: string;
 }
 
-export interface DatabaseWorkspaceByocCredentialsRow {
-  id: string;
-  workspace_id: string;
-  user_id: string;
-  fb_app_id: string;
-  encrypted_fb_app_secret: string;
-  status: 'unverified' | 'valid' | 'invalid';
-  last_tested_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface DatabaseFacebookAccountRow {
-  id: string;
-  user_id: string;
-  workspace_id: string;
-  fb_account_id: string;
-  display_name: string;
-  status: 'active' | 'disconnected' | 'expired';
-  encrypted_access_token: string;
-  token_expires_at: string | null;
-  profile_picture_url: string | null;
-  gender: string | null;
-  account_link: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface DatabaseFacebookPageRow {
-  id: string;
-  user_id: string;
-  workspace_id: string;
-  facebook_account_id: string;
-  fb_page_id: string;
-  page_name: string;
-  timezone?: string;
-  status: 'active' | 'paused' | 'fb_rate_limited' | 'page_checkpoint' | 'invalid_token' | 'disconnected';
-  encrypted_access_token: string;
-  category: string | null;
-  tasks: unknown[];
-  profile_picture_url: string | null;
-  starting_followers: number;
-  current_followers: number;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface DatabaseMediaFolderRow {
   id: string;
   user_id: string;
@@ -94,36 +47,6 @@ export interface DatabaseMediaItemRow {
   duration_seconds: number | null;
   aspect_ratio: string;
   caption_text: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface DatabasePageQueueSlotRow {
-  id: string;
-  user_id: string;
-  fb_page_id: string;
-  slot_time: string;
-  timezone?: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface DatabaseQueueItemRow {
-  id: string;
-  user_id: string;
-  fb_page_id: string;
-  slot_id: string | null;
-  media_id: string;
-  scheduled_time: string;
-  caption: string;
-  first_comment: string | null;
-  status: 'queued' | 'publishing' | 'published' | 'failed' | 'skipped';
-  retry_count: number;
-  max_retries: number;
-  fb_post_id: string | null;
-  fb_comment_id: string | null;
-  published_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -224,7 +147,7 @@ export type DatabaseDestinationRow = z.infer<typeof DatabaseDestinationRowSchema
 export interface DatabasePostingSlotRow {
   id: string;
   destination_id: string;
-  /** Format coverage, carried verbatim from page_queue_slots.allowed_formats. */
+  /** Format coverage, carried verbatim from the pre-unification slot table. */
   kind: string[];
   time_of_day: string;
   is_active: boolean;
@@ -334,15 +257,12 @@ export interface ClaimedUnifiedQueueItemRpcResult {
 }
 
 /**
- * Argument shapes for the NEW unified-schema RPC overloads (spec 119 §4.2,
+ * Argument shapes for the unified-schema RPC overloads (spec 119 §4.2,
  * migrations 20261022120000 §6 + 20261022140000). `Database.Functions`
- * below records THESE unified signatures, because production call sites
- * (worker claimer/consumers) call the unified overloads. A single
- * `Functions` record cannot express two overloads under one name, so
- * the legacy overload shapes are kept as the named `*LegacyArgs`
- * interfaces below — the legacy RPCs are still present in the database
- * (spec 117 locked them; spec 120 re-pointed them at the legacy tables)
- * and are still exercised by raw-SQL checks.
+ * below records these signatures; production call sites (worker
+ * claimer/consumers) call exactly them. The pre-unification overloads
+ * were dropped with their tables in the Phase 7 migration
+ * (20261024130000) and their argument types removed with them.
  */
 export interface ClaimDueQueueItemsUnifiedArgs {
   p_platform: Platform;
@@ -395,67 +315,6 @@ export interface RecoverStuckPublishingItemsUnifiedArgs {
   p_timeout_minutes?: number;
 }
 
-/** Legacy claim overload: claim_due_queue_items(INT, INT) on legacy_queue_items. */
-export interface ClaimDueQueueItemsLegacyArgs {
-  p_limit?: number;
-  p_max_per_page?: number;
-}
-
-/** Legacy settle overload (16 args): numeric error codes, page vocabulary. */
-export interface SettleQueueItemOutcomeLegacyArgs {
-  p_queue_item_id: string;
-  p_user_id: string;
-  p_fb_page_id: string;
-  p_outcome_status: string;
-  p_fb_post_id?: string | null;
-  p_fb_comment_id?: string | null;
-  p_retry_count?: number;
-  p_retry_delay_seconds?: number;
-  p_error_code?: number | null;
-  p_error_subcode?: number | null;
-  p_error_message?: string | null;
-  p_comment_warning?: string | null;
-  p_target_page_status?: string | null;
-  p_target_account_status?: string | null;
-  p_page_cooldown_seconds?: number | null;
-  p_buc_usage_pct?: number | null;
-}
-
-/** Legacy recover overload: recover_stuck_publishing_items(INT). */
-export interface RecoverStuckPublishingItemsLegacyArgs {
-  p_timeout_minutes?: number;
-}
-
-export interface DatabasePublishLogRow {
-  id: string;
-  user_id: string;
-  queue_item_id: string;
-  fb_page_id: string;
-  status: 'success' | 'failure' | 'retry';
-  attempt_number: number;
-  fb_response_code: number | null;
-  error_message: string | null;
-  error_details: Record<string, unknown> | null;
-  created_at: string;
-}
-
-export interface ClaimedQueueItemRpcResult {
-  id: string;
-  user_id: string;
-  fb_page_id: string;
-  media_id: string;
-  caption: string;
-  first_comment: string | null;
-  retry_count: number;
-  max_retries: number;
-  media_type: 'video' | 'image';
-  media_url: string;
-  storage_key: string;
-  external_page_id: string;
-  encrypted_access_token: string;
-  page_name: string;
-}
-
 /**
  * Generic Supabase Database type mapping for type-safe SupabaseClient<Database>
  */
@@ -471,39 +330,6 @@ export interface Database {
         Row: DatabaseWorkspaceRow;
         Insert: Partial<DatabaseWorkspaceRow> & { owner_id: string; name: string; subdomain: string };
         Update: Partial<DatabaseWorkspaceRow>;
-      };
-      workspace_byoc_credentials: {
-        Row: DatabaseWorkspaceByocCredentialsRow;
-        Insert: Partial<DatabaseWorkspaceByocCredentialsRow> & {
-          workspace_id: string;
-          user_id: string;
-          fb_app_id: string;
-          encrypted_fb_app_secret: string;
-        };
-        Update: Partial<DatabaseWorkspaceByocCredentialsRow>;
-      };
-      facebook_accounts: {
-        Row: DatabaseFacebookAccountRow;
-        Insert: Partial<DatabaseFacebookAccountRow> & {
-          user_id: string;
-          workspace_id?: string;
-          fb_account_id: string;
-          display_name: string;
-          encrypted_access_token: string;
-        };
-        Update: Partial<DatabaseFacebookAccountRow>;
-      };
-      facebook_pages: {
-        Row: DatabaseFacebookPageRow;
-        Insert: Partial<DatabaseFacebookPageRow> & {
-          user_id: string;
-          workspace_id?: string;
-          facebook_account_id: string;
-          fb_page_id: string;
-          page_name: string;
-          encrypted_access_token: string;
-        };
-        Update: Partial<DatabaseFacebookPageRow>;
       };
       media_folders: {
         Row: DatabaseMediaFolderRow;
@@ -523,35 +349,6 @@ export interface Database {
           url: string;
         };
         Update: Partial<DatabaseMediaItemRow>;
-      };
-      page_queue_slots: {
-        Row: DatabasePageQueueSlotRow;
-        Insert: Partial<DatabasePageQueueSlotRow> & {
-          user_id: string;
-          fb_page_id: string;
-          slot_time: string;
-        };
-        Update: Partial<DatabasePageQueueSlotRow>;
-      };
-      legacy_queue_items: {
-        Row: DatabaseQueueItemRow;
-        Insert: Partial<DatabaseQueueItemRow> & {
-          user_id: string;
-          fb_page_id: string;
-          media_id: string;
-          scheduled_time: string;
-        };
-        Update: Partial<DatabaseQueueItemRow>;
-      };
-      legacy_publish_logs: {
-        Row: DatabasePublishLogRow;
-        Insert: Partial<DatabasePublishLogRow> & {
-          user_id: string;
-          queue_item_id: string;
-          fb_page_id: string;
-          status: 'success' | 'failure' | 'retry';
-        };
-        Update: Partial<DatabasePublishLogRow>;
       };
       platform_credentials: {
         Row: DatabasePlatformCredentialsRow;

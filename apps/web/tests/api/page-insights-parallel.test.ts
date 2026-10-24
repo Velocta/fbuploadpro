@@ -116,7 +116,7 @@ describe('Facebook Page Insights — parallel Graph calls (spec 139)', () => {
         if (sql.includes('FROM workspaces')) {
           return Promise.resolve([{ id: 'ws_123' }]);
         }
-        if (sql.includes('FROM facebook_pages')) {
+        if (sql.includes('FROM destinations')) {
           return Promise.resolve([
             {
               id: pageId,

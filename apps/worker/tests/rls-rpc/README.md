@@ -10,14 +10,25 @@ workspace ownership, the legacy claim honours its 100-row cap, and
 the unified overloads are unchanged.
 Modelled on the spec 138 claim-rpc rig (`apps/worker/tests/claim-rpc/`).
 
+**Phase 7 update (2026-10-24):** the hardened database now also
+applies the drop migration (`20261024130000_drop_legacy_facebook_schema.sql`),
+so hardened mode asserts the post-drop state instead: the six legacy
+tables and six legacy RPC signatures are ABSENT (section a), the
+credentials assertions run against `platform_credentials` (the
+unified BYOC home, section c), and the retention RPC is intact.
+Vulnerable mode is unchanged in spirit — its database predates both
+the hardening and the drop, so the original sections run there
+against fixtures-legacy.sql.
+
 ## Layout
 
 | File | Role |
 |---|---|
 | `db/bootstrap.sql` | Minimal Supabase stub for plain Postgres: `anon` / `authenticated` / `service_role` (BYPASSRLS) roles, `auth` schema, `auth.users`, `auth.uid()` from `request.jwt.claim.sub` — plus Supabase's default-privilege posture (table-level SELECT/INSERT/UPDATE/DELETE to anon + authenticated, ALL to service_role) via `ALTER DEFAULT PRIVILEGES`, because this rig exercises GRANTs/RLS |
 | `db/run-migrations.ts` | Applies `bootstrap.sql`, then every file in `supabase/migrations/` in filename order; `RLS_RPC_MIGRATIONS_UNTIL=<file>` stops after that file (builds the pre-hardening DB) |
-| `fixtures.sql` | Deterministic two-tenant fixture (`rls117_reset`, `rls117_seed_legacy_items`): users A/B, their workspaces, FB account/page with dummy encrypted tokens, BYOC rows (incl. a planted row — user_id = A, workspace = B's), download jobs, a unified account/destination/queue-item graph |
-| `check.ts` | The assertion runner. `RLS_RPC_MODE=hardened` (default) asserts the post-migration state (44 assertions, groups a–f in the spec plus b2 for the INSERT-path fold-in); `RLS_RPC_MODE=vulnerable` asserts the holes are still open on the pre-hardening DB, proving the rig detects them. Both modes print a `pg_proc.proacl` + `pg_policies` dump (`RLS_RPC_DUMP_FILE=<path>` also writes it to a file) |
+| `fixtures.sql` | Deterministic two-tenant fixture (`rls117_reset`): users A/B, their workspaces, platform_credentials rows (incl. a planted row in B's workspace), download jobs, a unified account/destination/queue-item graph |
+| `fixtures-legacy.sql` | The pre-unification fixture graph (`rls117_reset_legacy`, `rls117_seed_legacy_items`): FB account/page with dummy encrypted tokens, BYOC rows (incl. a planted row — user_id = A, workspace = B's), legacy queue items. Applied ONLY in vulnerable mode, whose DB predates the Phase 7 drop |
+| `check.ts` | The assertion runner. `RLS_RPC_MODE=hardened` (default) asserts the post-migration state (groups a–f plus b2 for the INSERT-path fold-in; group a is the Phase 7 absence proof); `RLS_RPC_MODE=vulnerable` asserts the holes are still open on the pre-hardening DB, proving the rig detects them. Both modes print a `pg_proc.proacl` + `pg_policies` dump (`RLS_RPC_DUMP_FILE=<path>` also writes it to a file) |
 
 Rig code lives outside the worker build's runtime: no file here
 matches vitest's `*.test.*` include pattern, so the normal worker suite
@@ -91,7 +102,9 @@ cd apps/worker
 # Pre-hardening DB: every hole must show OPEN (44 assertions):
 RLS_RPC_MODE=vulnerable RLS_RPC_PG_URL='...rls117pre...' \
   pnpm exec tsx tests/rls-rpc/check.ts
-# Post-hardening DB: every hole must show CLOSED (44 assertions):
+# Post-hardening DB: every hole must show CLOSED (40 assertions —
+# the Phase 7 sections replaced the 15 legacy-RPC probes and the
+# 4 BYOC assertions with the absence proof + platform_credentials):
 RLS_RPC_PG_URL='...rls117...' pnpm exec tsx tests/rls-rpc/check.ts
 ```
 
@@ -115,6 +128,18 @@ RLS_RPC_PG_URL='...rls117...' pnpm exec tsx tests/rls-rpc/check.ts
   unified-overload regression probes unchanged, (f) 6/6 download-jobs
   policy assertions (all four policies `roles={authenticated}`, RLS
   visibility intact).
+- **Phase 7 re-run (2026-10-24, PostgreSQL 16.2, full chain incl.
+  `20261024130000_drop_legacy_facebook_schema.sql`): hardened mode
+  **40 assertions, 0 failures** — section (a) is now the post-drop
+  absence proof (six tables absent from `pg_class`, six legacy
+  signatures absent from `pg_proc`, the dropped counts RPC uncallable
+  with 42883 even for service_role; unified claim/settle/recover +
+  retention RPC present), section (c) asserts the credentials posture
+  against `platform_credentials`; vulnerable mode unchanged at
+  **44 assertions, 0 failures** on the pre-hardening DB. The ACL dump
+  below is the pre-Phase-7 record; the current hardened dump lists
+  only the four unified functions and no `workspace_byoc_credentials`
+  policy.
 - The migration is idempotent: re-applying
   `20261023120000_rls_rpc_hardening.sql` to the hardened DB exits 0
   (re-verified for the fold-in amendment).

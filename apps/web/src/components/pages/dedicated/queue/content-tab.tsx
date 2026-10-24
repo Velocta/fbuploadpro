@@ -4,20 +4,16 @@
  * Per-destination queue panel (spec 134 PR-134-1) — rebuilt clean-room
  * on shared/ui primitives + tokens and the 137 data layer.
  *
- * Data path (coordinator ruling, 2026-10-23, on the Step-1 verification):
- * the panel builds on the LEGACY data path exactly as plan.md specified.
- * Verification (code-checked on main) established: web-composed + bulk
- * Facebook posts land in `legacy_queue_items` (composer-submit →
- * POST /publishing/queue → legacy inserts; no web/worker-source bridge
- * to unified); the worker claims from unified `queue_items`; the web's
- * own health route documents this split as the designed interim state
- * "until Phase 7"; no unified web read exists (no route, no schema in
- * lib/api/schemas/queue.ts — legacy shape only, no unified query keys in
- * lib/data/query-keys.ts). Therefore this panel uses the typed client +
- * React Query over the EXISTING keys (`queue.items`,
- * `queue.statusCounts`, `pages.slots`) — no unified routes/schemas/keys,
- * no dual-read. Unified reading belongs to the Phase 7 web-enqueue
- * cutover, not this PR.
+ * Data path (coordinator ruling, 2026-10-23, on the Step-1 verification;
+ * updated for the Phase 7 drop, 2026-10-24): the panel builds on the
+ * Page-section queue routes over the EXISTING keys (`queue.items`,
+ * `queue.statusCounts`, `pages.slots`) — the typed client + React
+ * Query, no dual-read. At the ruling, those routes served the
+ * pre-unification queue table while the worker claimed from unified
+ * `queue_items`; since the Phase 7 drop the same routes read and
+ * write the unified table itself (composer creates land there too,
+ * via the destination enqueue), so this panel and the worker now
+ * share one queue.
  *
  * PROPS BRIDGE DELETED (spec 131 PR-131-3, this panel's named
  * deleter duty from PR-134-1): the section route no longer fetches

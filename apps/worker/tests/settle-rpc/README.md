@@ -7,7 +7,8 @@ in filename order, that the unified `settle_queue_item_outcome` —
 
 - exists as exactly **one** unified overload after the chain (the old
   16-arg TEXT-code signature is dropped, not shadowed by a second
-  overload; the legacy INT-code overload is untouched), with
+  overload; the legacy INT-code overload was dropped by exact
+  signature in the Phase 7 migration `20261024130000`), with
   service_role-only ACLs and `search_path = public` pinned;
 - settles normally (published + retry branches, one `publish_logs` row,
   returns `'settled'`);

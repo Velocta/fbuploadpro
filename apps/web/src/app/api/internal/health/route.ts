@@ -24,15 +24,12 @@ export const HEARTBEAT_STALE_SECONDS = 180; // ~3 missed 1-minute ticks
 export const STUCK_PUBLISHING_MINUTES = 10; // matches the worker recovery threshold
 const R2_PROBE_TIMEOUT_MS = 1000;
 
-const PAGE_STATUSES = [
-  'active',
-  'paused',
-  'fb_rate_limited',
-  'page_checkpoint',
-  'invalid_token',
-  'disconnected',
-] as const;
-const ACCOUNT_STATUSES = ['active', 'disconnected', 'expired'] as const;
+// Unified status vocabularies (Phase 7: the health tier measures the
+// unified world only — destinations + social_accounts, platform
+// 'facebook'). The payload keys keep their names; the values are the
+// unified statuses.
+const PAGE_STATUSES = ['active', 'rate_limited', 'disconnected', 'error'] as const;
+const ACCOUNT_STATUSES = ['active', 'expired', 'revoked', 'error'] as const;
 
 export interface InternalHealthPayload {
   status: 'ok' | 'degraded' | 'unhealthy';
@@ -52,11 +49,6 @@ export interface InternalHealthPayload {
       dueCount: number;
       oldestDueAgeSeconds: number | null;
       stuckPublishingCount: number;
-      legacy: {
-        dueCount: number;
-        oldestDueAgeSeconds: number | null;
-        stuckPublishingCount: number;
-      };
     };
     storage: { ok: boolean };
     facebook: {
@@ -124,15 +116,20 @@ async function defaultCheckStorage(): Promise<boolean> {
 async function countByStatus(
   db: SupabaseClient,
   table: string,
-  statuses: readonly string[]
+  statuses: readonly string[],
+  platform?: string
 ): Promise<Record<string, number>> {
   const entries = await Promise.all(
     statuses.map(async (status) => {
       try {
-        const { count, error } = await db
+        let query = db
           .from(table)
           .select('id', { head: true, count: 'exact' })
           .eq('status', status);
+        if (platform) {
+          query = query.eq('platform', platform);
+        }
+        const { count, error } = await query;
         return [status, error ? 0 : (count ?? 0)] as const;
       } catch {
         return [status, 0] as const;
@@ -144,7 +141,7 @@ async function countByStatus(
 
 type HeartbeatCheck = InternalHealthPayload['checks']['heartbeat'];
 type QueueCheck = InternalHealthPayload['checks']['queue'];
-type QueueTableCounts = Omit<QueueCheck, 'legacy'>;
+type QueueTableCounts = QueueCheck;
 
 const EMPTY_HEARTBEAT: HeartbeatCheck = {
   ok: false,
@@ -162,10 +159,7 @@ const EMPTY_QUEUE_TABLE: QueueTableCounts = {
   stuckPublishingCount: 0,
 };
 
-const EMPTY_QUEUE: QueueCheck = {
-  ...EMPTY_QUEUE_TABLE,
-  legacy: { ...EMPTY_QUEUE_TABLE },
-};
+const EMPTY_QUEUE: QueueCheck = { ...EMPTY_QUEUE_TABLE };
 
 async function checkHeartbeat(db: SupabaseClient, now: Date): Promise<HeartbeatCheck> {
   try {
@@ -199,12 +193,12 @@ async function checkHeartbeat(db: SupabaseClient, now: Date): Promise<HeartbeatC
 }
 
 /**
- * Measure one queue table with the publishing engine's own predicates.
+ * Measure the unified queue table with the publishing engine's own
+ * predicates.
  *
- * Due — matched to `claim_due_queue_items` (unified overload in
- * supabase/migrations/20261022120000_unified_schema_migration.sql §6a,
- * grouped-usage rewrite in 20261022140000_claim_rpc_grouped_usage.sql;
- * legacy overload §2a uses the same predicate on legacy_queue_items):
+ * Due — matched to `claim_due_queue_items` (supabase/migrations/
+ * 20261022120000_unified_schema_migration.sql §6a, grouped-usage
+ * rewrite in 20261022140000_claim_rpc_grouped_usage.sql):
  *   status = 'queued' AND scheduled_time <= now()
  * The claim RPC additionally filters by platform / lane kind /
  * destination & account health — those are per-claim eligibility, not
@@ -213,17 +207,15 @@ async function checkHeartbeat(db: SupabaseClient, now: Date): Promise<HeartbeatC
  * Stuck — matched to `recover_stuck_publishing_items` and the worker
  * claimer (`apps/worker/src/claimer.ts`: RECOVERY_TIMEOUT_MINUTES = 10,
  * mirrored by STUCK_PUBLISHING_MINUTES above):
- *   legacy (§2c): status = 'publishing' AND updated_at <= now() - 10m
- *   unified (§6c): status = 'publishing' AND
+ *   status = 'publishing' AND
  *     COALESCE(claimed_at, updated_at) <= now() - 10m
- * The unified predicate is expressed as a PostgREST `.or()`: a non-null
+ * The predicate is expressed as a PostgREST `.or()`: a non-null
  * claimed_at that is stale, or a null claimed_at with a stale updated_at
  * (a `.lte` on claimed_at alone never matches NULL rows).
  */
 async function measureQueueTable(
   db: SupabaseClient,
-  now: Date,
-  table: 'queue_items' | 'legacy_queue_items'
+  now: Date
 ): Promise<QueueTableCounts> {
   try {
     const timestamp = now.toISOString();
@@ -231,26 +223,19 @@ async function measureQueueTable(
       now.getTime() - STUCK_PUBLISHING_MINUTES * 60 * 1000
     ).toISOString();
     const dueQuery = await db
-      .from(table)
+      .from('queue_items')
       .select('id', { head: true, count: 'exact' })
       .eq('status', 'queued')
       .lte('scheduled_time', timestamp);
-    const stuckQuery =
-      table === 'queue_items'
-        ? await db
-            .from(table)
-            .select('id', { head: true, count: 'exact' })
-            .eq('status', 'publishing')
-            .or(
-              `claimed_at.lte.${stuckBefore},and(claimed_at.is.null,updated_at.lte.${stuckBefore})`
-            )
-        : await db
-            .from(table)
-            .select('id', { head: true, count: 'exact' })
-            .eq('status', 'publishing')
-            .lte('updated_at', stuckBefore);
+    const stuckQuery = await db
+      .from('queue_items')
+      .select('id', { head: true, count: 'exact' })
+      .eq('status', 'publishing')
+      .or(
+        `claimed_at.lte.${stuckBefore},and(claimed_at.is.null,updated_at.lte.${stuckBefore})`
+      );
     const { data: oldest } = await db
-      .from(table)
+      .from('queue_items')
       .select('scheduled_time')
       .eq('status', 'queued')
       .lte('scheduled_time', timestamp)
@@ -278,18 +263,11 @@ async function measureQueueTable(
 
 async function checkQueue(db: SupabaseClient, now: Date): Promise<QueueCheck> {
   try {
-    // Primary counts are the UNIFIED queue_items table — the table the
-    // worker claimer drains via claim_due_queue_items(platform, …) and
-    // consumers load (apps/worker/src/claimer.ts, consumers.ts).
-    // Legacy counts are kept as a secondary field: web tenant routes
-    // still create/read legacy_queue_items for live Facebook flows
-    // (e.g. publishing/queue, pages, slots routes), so dropping it
-    // would lose visibility into that backlog until Phase 7.
-    const [unified, legacy] = await Promise.all([
-      measureQueueTable(db, now, 'queue_items'),
-      measureQueueTable(db, now, 'legacy_queue_items'),
-    ]);
-    return { ...unified, legacy };
+    // The unified queue_items table is the only queue there is — the
+    // table the worker claimer drains via
+    // claim_due_queue_items(platform, …) and consumers load
+    // (apps/worker/src/claimer.ts, consumers.ts).
+    return await measureQueueTable(db, now);
   } catch {
     return EMPTY_QUEUE;
   }
@@ -340,18 +318,15 @@ export async function probeInternalHealth(
     : await defaultCheckStorage();
 
   const [pagesByStatus, accountsByStatus] = await Promise.all([
-    countByStatus(db, 'facebook_pages', PAGE_STATUSES),
-    countByStatus(db, 'facebook_accounts', ACCOUNT_STATUSES),
+    countByStatus(db, 'destinations', PAGE_STATUSES, 'facebook'),
+    countByStatus(db, 'social_accounts', ACCOUNT_STATUSES, 'facebook'),
   ]);
 
   const unhealthy = !dbOk || !heartbeat.ok || !storageOk;
   let status: InternalHealthPayload['status'] = 'ok';
   if (unhealthy) {
     status = 'unhealthy';
-  } else if (
-    queue.stuckPublishingCount > 0 ||
-    queue.legacy.stuckPublishingCount > 0
-  ) {
+  } else if (queue.stuckPublishingCount > 0) {
     status = 'degraded';
   }
 

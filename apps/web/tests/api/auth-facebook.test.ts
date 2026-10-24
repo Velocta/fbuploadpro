@@ -199,8 +199,8 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
             },
           ]);
         }
-        if (typeof sql === 'string' && sql.includes('INSERT INTO facebook_accounts')) {
-          savedEncryptedToken = params[4] as string;
+        if (typeof sql === 'string' && sql.includes('INSERT INTO social_accounts')) {
+          savedEncryptedToken = params[3] as string;
           return Promise.resolve([{ id: 'acc_123' }]);
         }
         return Promise.resolve([]);

@@ -353,7 +353,7 @@ describe('Boundary validation — consumers (spec 139 B15)', () => {
     const item = await makeItem();
     const { db, settleCalls } = await makeConsumerDb({
       item,
-      // 'disconnected' is the legacy facebook_accounts vocabulary.
+      // 'disconnected' is the pre-unification account vocabulary.
       account: { status: 'disconnected' },
     });
     const publisher = fakePublisher('facebook', async () => ({ status: 'published' }));

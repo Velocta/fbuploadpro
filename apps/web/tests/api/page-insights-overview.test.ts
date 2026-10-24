@@ -47,7 +47,7 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
         if (sql.includes('FROM workspaces')) {
           return Promise.resolve([{ id: 'ws_123' }]);
         }
-        if (sql.includes('FROM facebook_pages')) {
+        if (sql.includes('FROM destinations')) {
           return Promise.resolve([
             {
               id: pageId,
@@ -252,12 +252,12 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
     expect(res.status).toBe(404);
   });
 
-  it('queries by fb_page_id when pageId is a numeric Meta ID', async () => {
+  it('queries by external_destination_id when pageId is a numeric Meta ID', async () => {
     let capturedSql = '';
     let capturedParams: any[] = [];
     const mockDb = {
       query: vi.fn().mockImplementation((sql: string, params: any[]) => {
-        if (sql.includes('facebook_pages')) {
+        if (sql.includes('destinations')) {
           capturedSql = sql;
           capturedParams = params;
         }
@@ -295,20 +295,20 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
     });
 
     expect(res.status).toBe(200);
-    expect(capturedSql).toContain('p.fb_page_id = $1');
+    expect(capturedSql).toContain('d.external_destination_id = ');
     expect(capturedParams[0]).toBe(fbPageId);
   });
 
-  it('queries Supabase by id for UUID and fb_page_id for numeric Meta ID without .or() injection', async () => {
+  it('queries Supabase by id for UUID and external_destination_id for numeric Meta ID without .or() injection', async () => {
     const selectMock = vi.fn();
     const eqUserMock = vi.fn();
     const eqTargetMock = vi.fn();
     const maybeSingleMock = vi.fn().mockResolvedValue({
       data: {
         id: pageId,
-        fb_page_id: fbPageId,
-        page_name: 'Viral Cooking Daily',
-        encrypted_access_token: sampleEncryptedPageToken,
+        external_destination_id: fbPageId,
+        name: 'Viral Cooking Daily',
+        encrypted_destination_token: sampleEncryptedPageToken,
         status: 'active',
       },
       error: null,
@@ -374,7 +374,7 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
       dbClient: mockSupabase as any,
       fetchImpl: mockFetch as unknown as typeof fetch,
     });
-    expect(eqTargetMock).toHaveBeenCalledWith('fb_page_id', fbPageId);
+    expect(eqTargetMock).toHaveBeenCalledWith('external_destination_id', fbPageId);
   });
 
   it('maps Facebook OAuth invalid_token error code to healthStatus="invalid_token"', async () => {

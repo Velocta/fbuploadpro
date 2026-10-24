@@ -81,19 +81,19 @@ export async function handleGetInsights(
   } | null = null;
 
   if (client && 'query' in client && typeof client.query === 'function') {
-    const whereClause = isUuid ? 'p.id = $1' : 'p.fb_page_id = $1';
+    const whereClause = isUuid ? 'd.id = $1' : 'd.external_destination_id = $1';
     const pageRows = (await client.query(
-      `SELECT p.id, p.fb_page_id, p.page_name, 
-              p.encrypted_access_token, 
-              p.status
-       FROM facebook_pages p
-       WHERE ${whereClause} AND p.user_id = $2 AND p.workspace_id = $3`,
-      [pageId, session.userId, workspaceId]
+      `SELECT d.id, d.external_destination_id AS fb_page_id, d.name AS page_name,
+              d.encrypted_destination_token AS encrypted_access_token,
+              d.status
+       FROM destinations d
+       WHERE ${whereClause} AND d.workspace_id = $2 AND d.platform = 'facebook'`,
+      [pageId, workspaceId]
     )) as Array<{
       id: string;
       fb_page_id: string;
       page_name: string;
-      encrypted_access_token: string;
+      encrypted_access_token: string | null;
       status: string;
     }>;
 
@@ -105,7 +105,9 @@ export async function handleGetInsights(
       id: found.id as string,
       fb_page_id: found.fb_page_id as string,
       page_name: found.page_name as string,
-      encrypted_access_token: found.encrypted_access_token as string,
+      // A null destination token fails decryption below with the same
+      // 500 shape a corrupt stored token produced before.
+      encrypted_access_token: (found.encrypted_access_token as string | null) ?? '',
       status: found.status as string,
     };
   } else {
@@ -115,15 +117,15 @@ export async function handleGetInsights(
     }
 
     let queryBuilder = supabase
-      .from('facebook_pages')
-      .select('id, fb_page_id, page_name, encrypted_access_token, status')
-      .eq('user_id', session.userId)
-      .eq('workspace_id', workspaceId);
+      .from('destinations')
+      .select('id, external_destination_id, name, encrypted_destination_token, status')
+      .eq('workspace_id', workspaceId)
+      .eq('platform', 'facebook');
 
     if (isUuid) {
       queryBuilder = queryBuilder.eq('id', pageId);
     } else {
-      queryBuilder = queryBuilder.eq('fb_page_id', pageId);
+      queryBuilder = queryBuilder.eq('external_destination_id', pageId);
     }
 
     const { data: pageData, error } = await queryBuilder.maybeSingle();
@@ -134,9 +136,9 @@ export async function handleGetInsights(
 
     page = {
       id: pageData.id,
-      fb_page_id: pageData.fb_page_id,
-      page_name: pageData.page_name,
-      encrypted_access_token: pageData.encrypted_access_token,
+      fb_page_id: pageData.external_destination_id,
+      page_name: pageData.name,
+      encrypted_access_token: pageData.encrypted_destination_token ?? '',
       status: pageData.status,
     };
   }

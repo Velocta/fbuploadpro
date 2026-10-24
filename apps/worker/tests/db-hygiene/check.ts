@@ -46,7 +46,7 @@
  *           time_of_day) — spec 139 N5: a duplicate insert at the same
  *           destination + time fails 23505 (including with
  *           is_active = false — the constraint is plain, not partial,
- *           matching the legacy page_queue_slots semantics where
+ *           matching the pre-unification slot-table semantics where
  *           is_active is toggled in place and removal is a hard
  *           DELETE), while a distinct time or a distinct destination
  *           succeeds; the migration file is idempotent.

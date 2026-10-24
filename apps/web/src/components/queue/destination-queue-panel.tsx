@@ -10,10 +10,10 @@
  * PRs 750/756/759) and the worker publishes only from unified
  * `queue_items`; this panel reads and acts on that same table through
  * the unified destination queue routes (PR-134-3's API seam). During
- * the cutover the legacy Facebook Page section still reads
- * `legacy_queue_items`, so a post composed on the web appears HERE,
- * not in the Page-section queue, until Phase 7 drops the legacy
- * tables.
+ * the cutover the legacy Facebook Page section still read the
+ * pre-unification queue table, so a post composed on the web appeared
+ * HERE, not in the Page-section queue; since the Phase 7 drop, the
+ * Page section reads the unified table too.
  *
  * The row/table system is PR-134-1's, imported — never forked: the
  * same QueueRow, filter tabs, summary header, failed banner, bulk

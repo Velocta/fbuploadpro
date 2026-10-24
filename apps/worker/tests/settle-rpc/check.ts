@@ -4,10 +4,12 @@
  * Run against a database with bootstrap + ALL repo migrations applied
  * (incl. 20261023130000_settle_rpc_hardening.sql) — see README.md.
  * Asserts, for the UNIFIED settle_queue_item_outcome overload:
- *   (a) exactly ONE unified overload exists after the chain (the old
- *       16-arg TEXT-code signature is gone, the legacy INT-code overload
- *       is untouched), with service_role-only ACLs and a pinned
- *       search_path;
+ *   (a) exactly ONE overload exists after the chain — the unified
+ *       17-arg form carrying p_detail. The old 16-arg TEXT-code
+ *       signature is gone, and the legacy INT-code overload was
+ *       dropped by exact signature in the Phase 7 migration
+ *       (20261024130000) — with service_role-only ACLs and a pinned
+ *       search_path on the survivor;
  *   (b) EXECUTE is denied to authenticated + anon (42501) and allowed
  *       to service_role;
  *   (c) a normal settle works (published + retry branches), writes
@@ -216,11 +218,11 @@ async function sectionCatalog(pool: Pool): Promise<void> {
         AND p.proname = 'settle_queue_item_outcome'
       ORDER BY args`
   );
-  check(all.rows.length === 2, `exactly 2 settle overloads exist (legacy + unified), got ${all.rows.length}`);
+  check(all.rows.length === 1, `exactly 1 settle overload exists (unified only — legacy dropped in Phase 7), got ${all.rows.length}`);
   const unified = all.rows.filter((r) => r.args.includes('p_detail jsonb'));
   check(unified.length === 1, 'exactly ONE unified overload (carrying p_detail jsonb) exists', JSON.stringify(all.rows.map((r) => r.args)));
   const legacy = all.rows.filter((r) => r.args.includes('p_error_code integer'));
-  check(legacy.length === 1, 'legacy INT-code overload untouched (still present, no p_detail)');
+  check(legacy.length === 0, 'legacy INT-code overload absent (dropped by exact signature in Phase 7)');
   const u = unified[0];
   if (u) {
     check(u.acl.includes('service_role=X/'), 'unified ACL grants EXECUTE to service_role', u.acl);

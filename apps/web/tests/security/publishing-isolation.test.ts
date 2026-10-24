@@ -10,10 +10,8 @@ import {
   handleUpdateQueueSlot,
   handleDeleteQueueSlot,
 } from '../../src/app/api/tenant/[subdomain]/pages/[pageId]/slots/[slotId]/route';
-import {
-  handleEnqueueMedia,
-  handleListQueueItems,
-} from '../../src/app/api/tenant/[subdomain]/publishing/queue/route';
+import { handleListQueueItems } from '../../src/app/api/tenant/[subdomain]/publishing/queue/route';
+import { handleDestinationEnqueue } from '../../src/app/api/tenant/[subdomain]/publishing/destination-queue/route';
 import {
   handleUpdateQueueItem,
   handleDeleteQueueItem,
@@ -131,16 +129,24 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     });
 
     it('blocks User B from enqueuing media via User A tenant route with 403 Forbidden', async () => {
-      const req = new NextRequest('http://localhost:3000/api/tenant/tenant-a/publishing/queue', {
-        method: 'POST',
-        headers: { cookie: tokenCookieUserB, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          pageId: userA.pageId,
-          mediaId: userA.mediaId,
-          caption: 'Cross-tenant breach attempt',
-        }),
-      });
-      const res = await handleEnqueueMedia(req, 'tenant-a');
+      // Creates run through the unified destination enqueue since the
+      // Phase 7 drop removed the legacy queue POST handler.
+      const req = new NextRequest(
+        'http://localhost:3000/api/tenant/tenant-a/publishing/destination-queue',
+        {
+          method: 'POST',
+          headers: { cookie: tokenCookieUserB, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            platform: 'facebook',
+            destinationId: userA.pageId,
+            kind: 'video',
+            mediaItemIds: [userA.mediaId],
+            caption: 'Cross-tenant breach attempt',
+            intent: 'now',
+          }),
+        }
+      );
+      const res = await handleDestinationEnqueue(req, 'tenant-a');
       expect(res.status).toBe(403);
     });
 
@@ -180,7 +186,6 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
       const res = await handlePublishNow(req, 'tenant-a', userA.queueItemId);
       expect(res.status).toBe(403);
     });
-
   });
 
   describe('2. Object-Level IDOR Guards (Queue Slots)', () => {
@@ -190,10 +195,11 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_b' }]);
           }
-          if (sql.includes('FROM facebook_pages')) {
-            // Page ID check enforces WHERE id = $1 AND user_id = $2
-            if (params && params[0] === userA.pageId && params[1] === userB.id) {
-              return Promise.resolve([]); // Page does not belong to User B
+          if (sql.includes('FROM destinations')) {
+            // Destination check enforces WHERE id = $1 AND workspace_id = $2;
+            // User A's page lives in ws_a, so ws_b sees nothing.
+            if (params && params[0] === userA.pageId && params[1] === 'ws_b') {
+              return Promise.resolve([]);
             }
           }
           return Promise.resolve([]);
@@ -221,8 +227,8 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_b' }]);
           }
-          if (sql.includes('FROM facebook_pages')) {
-            if (params && params[0] === userA.pageId && params[1] === userB.id) {
+          if (sql.includes('FROM destinations')) {
+            if (params && params[0] === userA.pageId && params[1] === 'ws_b') {
               return Promise.resolve([]);
             }
           }
@@ -252,17 +258,16 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     it('blocks User B from updating User A slot by ID with 404 Not Found', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-          if (sql.includes('FROM facebook_pages')) {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_b' }]);
+          }
+          if (sql.includes('FROM destinations')) {
             return Promise.resolve([{ id: userB.pageId, timezone: 'UTC' }]);
           }
-          if (sql.includes('UPDATE page_queue_slots')) {
-            // WHERE id = $4 AND fb_page_id = $5 AND user_id = $6
-            if (
-              params &&
-              params[3] === userA.slotId &&
-              params[4] === userB.pageId &&
-              params[5] === userB.id
-            ) {
+          if (sql.includes('UPDATE posting_slots')) {
+            // WHERE id = $4 AND destination_id = $5 — the slot id
+            // belongs to User A's page, not User B's, so no row moves.
+            if (params && params[3] === userA.slotId && params[4] === userB.pageId) {
               return Promise.resolve([]);
             }
           }
@@ -293,17 +298,15 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     it('blocks User B from deleting User A slot by ID with 404 Not Found', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-          if (sql.includes('FROM facebook_pages')) {
-            return Promise.resolve([{ id: userB.pageId, timezone: 'UTC' }]);
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_b' }]);
           }
-          if (sql.includes('DELETE FROM page_queue_slots')) {
-            // WHERE id = $1 AND fb_page_id = $2 AND user_id = $3
-            if (
-              params &&
-              params[0] === userA.slotId &&
-              params[1] === userB.pageId &&
-              params[2] === userB.id
-            ) {
+          if (sql.includes('FROM destinations')) {
+            return Promise.resolve([{ id: userB.pageId }]);
+          }
+          if (sql.includes('DELETE FROM posting_slots')) {
+            // WHERE id = $1 AND destination_id = $2
+            if (params && params[0] === userA.slotId && params[1] === userB.pageId) {
               return Promise.resolve([]);
             }
           }
@@ -332,121 +335,132 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
   });
 
   describe('3. Cross-Tenant Enqueuing & Foreign Key IDOR Guards', () => {
-    it('blocks User B from enqueuing media targeting User A page with 404 Not Found', async () => {
-      const mockDb: Partial<DatabaseClient> = {
-        query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
+    // The unified destination enqueue is the only create path since
+    // the Phase 7 drop. Its guards: the destination must belong to
+    // the caller's workspace, every media id must belong to the
+    // session user, and a pinned slot must be one of the
+    // destination's own posting_slots.
+    function createEnqueueDb() {
+      const destinations = new Map([
+        [
+          userA.pageId,
+          { id: userA.pageId, workspace_id: 'ws_a', platform: 'facebook', timezone: 'UTC', status: 'active' },
+        ],
+        [
+          userB.pageId,
+          { id: userB.pageId, workspace_id: 'ws_b', platform: 'facebook', timezone: 'UTC', status: 'active' },
+        ],
+      ]);
+      const media = new Map([
+        [
+          userA.mediaId,
+          { id: userA.mediaId, user_id: userA.id, media_type: 'video', url: 'https://cdn.example.com/a.mp4', storage_key: null },
+        ],
+        [
+          userB.mediaId,
+          { id: userB.mediaId, user_id: userB.id, media_type: 'video', url: 'https://cdn.example.com/b.mp4', storage_key: null },
+        ],
+      ]);
+      const slots = [
+        { id: userB.slotId, destination_id: userB.pageId, kind: ['video'], time_of_day: '09:00:00', is_active: true },
+      ];
+      return {
+        query: vi.fn().mockImplementation((sql: string, params: any[] = []) => {
           if (sql.includes('FROM workspaces')) {
-            return Promise.resolve([{ id: 'ws_b' }]);
+            return Promise.resolve(params[0] === 'tenant-b' ? [{ id: 'ws_b' }] : []);
           }
-          if (sql.includes('FROM facebook_pages')) {
-            // Page check: WHERE id = $1 AND user_id = $2
-            if (params && params[0] === userA.pageId && params[1] === userB.id) {
-              return Promise.resolve([]);
-            }
+          if (sql.includes('FROM destinations')) {
+            const row = destinations.get(String(params[0]));
+            return Promise.resolve(row && row.workspace_id === params[1] ? [row] : []);
+          }
+          if (sql.includes('FROM media_items')) {
+            const ids = (params[1] as string[]) ?? [];
+            return Promise.resolve(
+              [...media.values()].filter((m) => m.user_id === params[0] && ids.includes(m.id))
+            );
+          }
+          if (sql.includes('FROM posting_slots')) {
+            return Promise.resolve(slots.filter((s) => s.destination_id === params[0]));
+          }
+          if (sql.includes('FROM queue_items')) {
+            return Promise.resolve([]);
+          }
+          if (sql.includes('INSERT INTO queue_items')) {
+            return Promise.resolve([{ id: userB.queueItemId }]);
           }
           return Promise.resolve([]);
         }),
-      };
+      } as unknown as DatabaseClient;
+    }
 
-      const req = new NextRequest('http://localhost:3000/api/tenant/tenant-b/publishing/queue', {
-        method: 'POST',
-        headers: { cookie: tokenCookieUserB, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          pageId: userA.pageId,
-          mediaId: userB.mediaId,
-          caption: 'Hijack page queue',
-        }),
-      });
-      const res = await handleEnqueueMedia(req, 'tenant-b', mockDb as DatabaseClient);
+    it('blocks User B from enqueuing media targeting User A destination with 404 Not Found', async () => {
+      const mockDb = createEnqueueDb();
+
+      const req = new NextRequest(
+        'http://localhost:3000/api/tenant/tenant-b/publishing/destination-queue',
+        {
+          method: 'POST',
+          headers: { cookie: tokenCookieUserB, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            platform: 'facebook',
+            destinationId: userA.pageId,
+            kind: 'video',
+            mediaItemIds: [userB.mediaId],
+            caption: 'Hijack destination queue',
+            intent: 'now',
+          }),
+        }
+      );
+      const res = await handleDestinationEnqueue(req, 'tenant-b', mockDb as never);
       expect(res.status).toBe(404);
       const body = await res.json();
-      expect(body.error).toBe('Page not found');
+      expect(body.error).toBe('Destination not found');
     });
 
     it('blocks User B from enqueuing User A media asset with 404 Not Found', async () => {
-      const mockDb: Partial<DatabaseClient> = {
-        query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-          if (sql.includes('FROM workspaces')) {
-            return Promise.resolve([{ id: 'ws_b' }]);
-          }
-          if (sql.includes('FROM facebook_pages')) {
-            if (params && params[0] === userB.pageId && params[1] === userB.id) {
-              return Promise.resolve([{ id: userB.pageId, timezone: 'UTC' }]);
-            }
-          }
-          if (sql.includes('FROM media_items')) {
-            // Media check: WHERE id = $1 AND user_id = $2
-            if (params && params[0] === userA.mediaId && params[1] === userB.id) {
-              return Promise.resolve([]);
-            }
-          }
-          return Promise.resolve([]);
-        }),
-      };
+      const mockDb = createEnqueueDb();
 
-      const req = new NextRequest('http://localhost:3000/api/tenant/tenant-b/publishing/queue', {
-        method: 'POST',
-        headers: { cookie: tokenCookieUserB, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          pageId: userB.pageId,
-          mediaId: userA.mediaId,
-          caption: 'Steal User A media',
-        }),
-      });
-      const res = await handleEnqueueMedia(req, 'tenant-b', mockDb as DatabaseClient);
+      const req = new NextRequest(
+        'http://localhost:3000/api/tenant/tenant-b/publishing/destination-queue',
+        {
+          method: 'POST',
+          headers: { cookie: tokenCookieUserB, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            platform: 'facebook',
+            destinationId: userB.pageId,
+            kind: 'video',
+            mediaItemIds: [userA.mediaId],
+            caption: 'Steal User A media',
+            intent: 'now',
+          }),
+        }
+      );
+      const res = await handleDestinationEnqueue(req, 'tenant-b', mockDb as never);
       expect(res.status).toBe(404);
       const body = await res.json();
       expect(body.error).toBe('Media not found');
     });
 
     it('blocks User B from enqueuing media into User A queue slot with 404 Not Found', async () => {
-      const mockDb: Partial<DatabaseClient> = {
-        query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-          if (sql.includes('FROM workspaces')) {
-            return Promise.resolve([{ id: 'ws_b' }]);
-          }
-          if (sql.includes('FROM facebook_pages')) {
-            return Promise.resolve([{ id: userB.pageId, timezone: 'UTC' }]);
-          }
-          if (sql.includes('FROM media_items')) {
-            return Promise.resolve([
-              {
-                id: userB.mediaId,
-                name: 'video.mp4',
-                media_type: 'video',
-                url: 'https://cdn.example.com/video.mp4',
-                thumbnail_url: null,
-                aspect_ratio: '16:9',
-                duration_seconds: 30,
-              },
-            ]);
-          }
-          if (sql.includes('FROM page_queue_slots')) {
-            // Slot check: WHERE id = $1 AND fb_page_id = $2 AND user_id = $3
-            if (
-              params &&
-              params[0] === userA.slotId &&
-              params[1] === userB.pageId &&
-              params[2] === userB.id
-            ) {
-              return Promise.resolve([]);
-            }
-          }
-          return Promise.resolve([]);
-        }),
-      };
+      const mockDb = createEnqueueDb();
 
-      const req = new NextRequest('http://localhost:3000/api/tenant/tenant-b/publishing/queue', {
-        method: 'POST',
-        headers: { cookie: tokenCookieUserB, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          pageId: userB.pageId,
-          mediaId: userB.mediaId,
-          slotId: userA.slotId,
-          caption: 'Steal User A slot',
-        }),
-      });
-      const res = await handleEnqueueMedia(req, 'tenant-b', mockDb as DatabaseClient);
+      const req = new NextRequest(
+        'http://localhost:3000/api/tenant/tenant-b/publishing/destination-queue',
+        {
+          method: 'POST',
+          headers: { cookie: tokenCookieUserB, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            platform: 'facebook',
+            destinationId: userB.pageId,
+            kind: 'video',
+            mediaItemIds: [userB.mediaId],
+            slotId: userA.slotId,
+            caption: 'Steal User A slot',
+            intent: 'queue',
+          }),
+        }
+      );
+      const res = await handleDestinationEnqueue(req, 'tenant-b', mockDb as never);
       expect(res.status).toBe(404);
       const body = await res.json();
       expect(body.error).toBe('Queue slot not found');
@@ -454,18 +468,21 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
   });
 
   describe('4. Object-Level IDOR Guards (Queue Items & Actions)', () => {
-    it('blocks User B from updating User A queue item by ID with 404 Not Found', async () => {
-      const mockDb: Partial<DatabaseClient> = {
-        query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-          if (sql.includes('FROM legacy_queue_items')) {
-            // WHERE qi.id = $1 AND qi.user_id = $2
-            if (params && params[0] === userA.queueItemId && params[1] === userB.id) {
-              return Promise.resolve([]);
-            }
+    function createItemDb() {
+      return {
+        query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_b' }]);
           }
+          // Every queue_items read/write is scoped by workspace_id;
+          // User A's item lives in ws_a, so ws_b finds nothing.
           return Promise.resolve([]);
         }),
-      };
+      } as unknown as DatabaseClient;
+    }
+
+    it('blocks User B from updating User A queue item by ID with 404 Not Found', async () => {
+      const mockDb = createItemDb();
 
       const req = new NextRequest(
         `http://localhost:3000/api/tenant/tenant-b/publishing/queue/${userA.queueItemId}`,
@@ -487,16 +504,7 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     });
 
     it('blocks User B from deleting User A queue item by ID with 404 Not Found', async () => {
-      const mockDb: Partial<DatabaseClient> = {
-        query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-          if (sql.includes('FROM legacy_queue_items')) {
-            if (params && params[0] === userA.queueItemId && params[1] === userB.id) {
-              return Promise.resolve([]);
-            }
-          }
-          return Promise.resolve([]);
-        }),
-      };
+      const mockDb = createItemDb();
 
       const req = new NextRequest(
         `http://localhost:3000/api/tenant/tenant-b/publishing/queue/${userA.queueItemId}`,
@@ -517,16 +525,7 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     });
 
     it('blocks User B from triggering publish-now on User A queue item with 404 Not Found', async () => {
-      const mockDb: Partial<DatabaseClient> = {
-        query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-          if (sql.includes('FROM legacy_queue_items')) {
-            if (params && params[0] === userA.queueItemId && params[1] === userB.id) {
-              return Promise.resolve([]);
-            }
-          }
-          return Promise.resolve([]);
-        }),
-      };
+      const mockDb = createItemDb();
 
       const req = new NextRequest(
         `http://localhost:3000/api/tenant/tenant-b/publishing/queue/${userA.queueItemId}/publish-now`,
@@ -554,10 +553,12 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_b' }]);
           }
-          // SQL query enforces qi.user_id = $1, workspace_id = $2, AND qi.fb_page_id = $3
-          expect(params?.[0]).toBe(userB.id);
-          expect(params?.[1]).toBe('ws_b');
-          expect(params?.[2]).toBe(userA.pageId);
+          if (sql.includes('FROM queue_items')) {
+            // Unified scoping: $1 is the caller's workspace, $2 the
+            // page filter — User A's items live in ws_a, never ws_b.
+            expect(params?.[0]).toBe('ws_b');
+            expect(params?.[1]).toBe(userA.pageId);
+          }
           if (sql.includes('COUNT(*)')) {
             return Promise.resolve([{ total: 0 }]);
           }
@@ -576,34 +577,41 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
       expect(body.total).toBe(0);
     });
 
-    it('ensures User B queue list query is strictly parameterized by User B user_id', async () => {
+    it('ensures User B queue list query is strictly parameterized by User B workspace', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_b' }]);
           }
-          // Parameter 1 must be User B's user_id, parameter 2 is workspace_id
-          expect(params?.[0]).toBe(userB.id);
-          expect(params?.[1]).toBe('ws_b');
+          if (sql.includes('FROM queue_items') && !sql.includes('GROUP BY')) {
+            // Parameter 1 of every item query is the caller's
+            // workspace id — the unified isolation boundary.
+            expect(params?.[0]).toBe('ws_b');
+          }
 
           if (sql.includes('COUNT(*)')) {
             return Promise.resolve([{ total: 1 }]);
           }
+          if (sql.includes('GROUP BY')) {
+            return Promise.resolve([]);
+          }
           return Promise.resolve([
             {
               id: userB.queueItemId,
-              user_id: userB.id,
-              fb_page_id: userB.pageId,
+              destination_id: userB.pageId,
               slot_id: userB.slotId,
-              media_id: userB.mediaId,
+              media_item_id: userB.mediaId,
+              kind: 'video',
+              platform_format: 'reel',
+              link_url: null,
               scheduled_time: new Date().toISOString(),
               caption: 'User B post',
               first_comment: null,
               status: 'queued',
               retry_count: 0,
               max_retries: 3,
-              fb_post_id: null,
-              fb_comment_id: null,
+              external_post_id: null,
+              external_comment_id: null,
               published_at: null,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -628,7 +636,5 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
       expect(body.items[0].id).toBe(userB.queueItemId);
       expect(body.items[0].userId).toBe(userB.id);
     });
-
-
   });
 });

@@ -4,10 +4,18 @@ import {
   getRouteSupabase,
   isLegacyClient,
 } from '@/lib/route-auth';
+import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { enforceIpRateLimit } from '@/lib/request-body';
 
+/**
+ * Publish-now for the Facebook Page section, on the unified
+ * `queue_items` table (Phase 7): the item is re-queued for immediate
+ * dispatch (scheduled_time = now, any stale claim marker cleared —
+ * the same requeue semantics as the destination queue's publish-now).
+ * Scoping is by workspace, the unified tables' isolation boundary.
+ */
 export async function handlePublishNow(
   request: NextRequest,
   subdomain: string,
@@ -18,11 +26,16 @@ export async function handlePublishNow(
   if (auth.errorResponse) return auth.errorResponse;
   const session = auth.session;
 
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
+
   if (isLegacyClient(dbClient)) {
-    // 3. Check existing item
+    // Check existing item
     const existingRows = (await dbClient.query(
-      `SELECT id, user_id, status FROM legacy_queue_items WHERE id = $1 AND user_id = $2`,
-      [itemId, session.userId]
+      `SELECT id, status FROM queue_items WHERE id = $1 AND workspace_id = $2`,
+      [itemId, workspaceId]
     )) as Record<string, unknown>[];
 
     if (!existingRows || existingRows.length === 0) {
@@ -37,14 +50,15 @@ export async function handlePublishNow(
       );
     }
 
-    // 4. Update scheduled_time to now() and status to 'queued'
+    // Update scheduled_time to now() and status to 'queued'
     await dbClient.query(
-      `UPDATE legacy_queue_items
+      `UPDATE queue_items
        SET scheduled_time = now(),
            status = 'queued',
+           claimed_at = NULL,
            updated_at = now()
-       WHERE id = $1 AND user_id = $2`,
-      [itemId, session.userId]
+       WHERE id = $1 AND workspace_id = $2`,
+      [itemId, workspaceId]
     );
 
     return NextResponse.json(
@@ -62,10 +76,10 @@ export async function handlePublishNow(
   }
 
   const { data: existing, error: existErr } = await supabase
-    .from('legacy_queue_items')
-    .select('id, user_id, status')
+    .from('queue_items')
+    .select('id, status')
     .eq('id', itemId)
-    .eq('user_id', session.userId)
+    .eq('workspace_id', workspaceId)
     .maybeSingle();
 
   if (existErr || !existing) {
@@ -80,14 +94,15 @@ export async function handlePublishNow(
   }
 
   const { error: updateErr } = await supabase
-    .from('legacy_queue_items')
+    .from('queue_items')
     .update({
       scheduled_time: new Date().toISOString(),
       status: 'queued',
+      claimed_at: null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', itemId)
-    .eq('user_id', session.userId);
+    .eq('workspace_id', workspaceId);
 
   if (updateErr) {
     return NextResponse.json({ error: 'Failed to dispatch item' }, { status: 500 });

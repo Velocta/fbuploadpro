@@ -40,6 +40,13 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
   });
 
   function createMockAccountStore() {
+    // Emulates the UNIFIED tables (Phase 7): accounts live in
+    // social_accounts keyed by (workspace_id, platform,
+    // external_account_id) with gender/account_link inside metadata;
+    // pages live in destinations keyed by account row id, with the
+    // destination token in encrypted_destination_token and a paused
+    // page represented as status 'disconnected' + metadata.fb_status.
+    const WORKSPACE_ID = 'ws_multi_123';
     const storedAccounts = new Map<
       string,
       {
@@ -58,30 +65,38 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
       string,
       {
         id: string;
-        facebookAccountId: string;
+        accountId: string;
         fbPageId: string;
         encryptedPageToken: string;
         status: string;
+        metadata: Record<string, unknown>;
       }
     >();
 
     const mockSupabase = {
       from: vi.fn().mockImplementation((table: string) => {
-        if (table === 'facebook_accounts') {
+        if (table === 'social_accounts') {
           return {
             select: vi.fn().mockImplementation((_cols: string) => {
-              let selectedUserId = '';
               let selectedFbAccountId = '';
               const chain = {
                 eq: vi.fn().mockImplementation((col: string, val: string) => {
-                  if (col === 'user_id') selectedUserId = val;
-                  if (col === 'fb_account_id') selectedFbAccountId = val;
+                  if (col === 'external_account_id') selectedFbAccountId = val;
                   return chain;
                 }),
                 maybeSingle: vi.fn().mockImplementation(() => {
-                  const existing = storedAccounts.get(`${selectedUserId}:${selectedFbAccountId}`);
+                  const existing = storedAccounts.get(`${WORKSPACE_ID}:${selectedFbAccountId}`);
                   return Promise.resolve({
-                    data: existing ? { id: existing.id, status: existing.status } : null,
+                    data: existing
+                      ? {
+                          id: existing.id,
+                          status: existing.status,
+                          metadata: {
+                            gender: existing.gender,
+                            account_link: existing.accountLink,
+                          },
+                        }
+                      : null,
                     error: null,
                   });
                 }),
@@ -89,18 +104,18 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
               return chain;
             }),
             upsert: vi.fn().mockImplementation((record: Record<string, any>) => {
-              const uId = record.user_id as string;
-              const fbAccountId = record.fb_account_id as string;
-              const existing = storedAccounts.get(`${uId}:${fbAccountId}`);
+              const fbAccountId = record.external_account_id as string;
+              const existing = storedAccounts.get(`${WORKSPACE_ID}:${fbAccountId}`);
               const rowId = existing?.id ?? `acc_${fbAccountId}`;
-              storedAccounts.set(`${uId}:${fbAccountId}`, {
+              const metadata = (record.metadata ?? {}) as Record<string, unknown>;
+              storedAccounts.set(`${WORKSPACE_ID}:${fbAccountId}`, {
                 id: rowId,
                 fbAccountId,
                 displayName: record.display_name,
                 token: record.encrypted_access_token,
-                profilePictureUrl: record.profile_picture_url ?? null,
-                gender: record.gender ?? null,
-                accountLink: record.account_link ?? null,
+                profilePictureUrl: record.avatar_url ?? null,
+                gender: (metadata.gender as string | null) ?? null,
+                accountLink: (metadata.account_link as string | null) ?? null,
                 status: 'active',
               });
               return {
@@ -115,33 +130,26 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
           };
         }
 
-        if (table === 'facebook_pages') {
+        if (table === 'destinations') {
           return {
             select: vi.fn().mockImplementation((_cols: string) => {
               let filterAccountId = '';
-              let filterUserId = '';
-              let excludedStatus = '';
-              const chain = {
+              const chain: any = {
                 eq: vi.fn().mockImplementation((col: string, val: string) => {
-                  if (col === 'facebook_account_id') filterAccountId = val;
-                  if (col === 'user_id') filterUserId = val;
+                  if (col === 'account_id') filterAccountId = val;
                   return chain;
                 }),
-                neq: vi.fn().mockImplementation((col: string, val: string) => {
-                  if (col === 'status') excludedStatus = val;
+                then: (resolve: (val: any) => void) => {
                   const matching = Array.from(storedPages.values())
-                    .filter(
-                      (p) =>
-                        (!filterAccountId || p.facebookAccountId === filterAccountId) &&
-                        p.status !== excludedStatus
-                    )
+                    .filter((p) => !filterAccountId || p.accountId === filterAccountId)
                     .map((p) => ({
                       id: p.id,
-                      fb_page_id: p.fbPageId,
+                      external_destination_id: p.fbPageId,
                       status: p.status,
+                      metadata: p.metadata,
                     }));
-                  return Promise.resolve({ data: matching, error: null });
-                }),
+                  return Promise.resolve({ data: matching, error: null }).then(resolve);
+                },
               };
               return chain;
             }),
@@ -150,8 +158,8 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
               const applyUpdates = () => {
                 const existingPage = storedPages.get(targetPageId);
                 if (existingPage) {
-                  if (updates.encrypted_access_token) {
-                    existingPage.encryptedPageToken = updates.encrypted_access_token;
+                  if (updates.encrypted_destination_token) {
+                    existingPage.encryptedPageToken = updates.encrypted_destination_token;
                   }
                   if (updates.status) {
                     existingPage.status = updates.status;
@@ -259,18 +267,18 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
 
     // Verify both distinct accounts are preserved in the workspace with profile_picture_url, gender, and account_link
     expect(storedAccounts.size).toBe(2);
-    expect(storedAccounts.get(`${userId}:fb_user_alpha`)?.displayName).toBe('Alpha Agency Profile');
-    expect(storedAccounts.get(`${userId}:fb_user_alpha`)?.profilePictureUrl).toBe(
+    expect(storedAccounts.get(`ws_multi_123:fb_user_alpha`)?.displayName).toBe('Alpha Agency Profile');
+    expect(storedAccounts.get(`ws_multi_123:fb_user_alpha`)?.profilePictureUrl).toBe(
       'https://platform-lookaside.fbsbx.com/platform/profilepic/alpha.jpg'
     );
-    expect(storedAccounts.get(`${userId}:fb_user_alpha`)?.gender).toBe('female');
-    expect(storedAccounts.get(`${userId}:fb_user_alpha`)?.accountLink).toBe(
+    expect(storedAccounts.get(`ws_multi_123:fb_user_alpha`)?.gender).toBe('female');
+    expect(storedAccounts.get(`ws_multi_123:fb_user_alpha`)?.accountLink).toBe(
       'https://www.facebook.com/app_scoped_user_id/fb_user_alpha/'
     );
-    expect(storedAccounts.get(`${userId}:fb_user_beta`)?.displayName).toBe('Beta Personal Profile');
-    expect(storedAccounts.get(`${userId}:fb_user_beta`)?.profilePictureUrl).toBeNull();
-    expect(storedAccounts.get(`${userId}:fb_user_beta`)?.gender).toBeNull();
-    expect(storedAccounts.get(`${userId}:fb_user_beta`)?.accountLink).toBeNull();
+    expect(storedAccounts.get(`ws_multi_123:fb_user_beta`)?.displayName).toBe('Beta Personal Profile');
+    expect(storedAccounts.get(`ws_multi_123:fb_user_beta`)?.profilePictureUrl).toBeNull();
+    expect(storedAccounts.get(`ws_multi_123:fb_user_beta`)?.gender).toBeNull();
+    expect(storedAccounts.get(`ws_multi_123:fb_user_beta`)?.accountLink).toBeNull();
   });
 
   it('updates existing credentials, profile_picture_url, gender, and account_link when reconnecting the same Facebook account', async () => {
@@ -328,19 +336,19 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
 
     // Size remains 1 (no duplicate rows created)
     expect(storedAccounts.size).toBe(1);
-    expect(storedAccounts.get(`${userId}:fb_user_same`)?.displayName).toBe('Same Profile Renamed');
-    expect(storedAccounts.get(`${userId}:fb_user_same`)?.profilePictureUrl).toBe(
+    expect(storedAccounts.get(`ws_multi_123:fb_user_same`)?.displayName).toBe('Same Profile Renamed');
+    expect(storedAccounts.get(`ws_multi_123:fb_user_same`)?.profilePictureUrl).toBe(
       'https://platform-lookaside.fbsbx.com/platform/profilepic/refreshed.jpg'
     );
-    expect(storedAccounts.get(`${userId}:fb_user_same`)?.gender).toBe('male');
-    expect(storedAccounts.get(`${userId}:fb_user_same`)?.accountLink).toBe(
+    expect(storedAccounts.get(`ws_multi_123:fb_user_same`)?.gender).toBe('male');
+    expect(storedAccounts.get(`ws_multi_123:fb_user_same`)?.accountLink).toBe(
       'https://www.facebook.com/app_scoped_user_id/fb_user_same/'
     );
   });
 
-  it('auto-refreshes encrypted_page_token for all linked pages on reconnect and sets status = active ONLY for invalid_token pages without importing unlinked pages (Spec 031)', async () => {
+  it('auto-refreshes the destination token for all linked pages on reconnect and sets status = active ONLY for error (invalid-token) pages without importing unlinked pages (Spec 031)', async () => {
     const { storedAccounts, storedPages, mockSupabase } = createMockAccountStore();
-    storedAccounts.set(`${userId}:fb-john`, {
+    storedAccounts.set(`ws_multi_123:fb-john`, {
       id: 'acc_fb-john',
       fbAccountId: 'fb-john',
       displayName: 'John Doe',
@@ -351,26 +359,32 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
       status: 'expired',
     });
 
+    // Unified destination states: the legacy 'invalid_token' page is
+    // status 'error'; the legacy 'paused' page is status
+    // 'disconnected' carrying the fb_status paused marker.
     storedPages.set('page_row_a', {
       id: 'page_row_a',
-      facebookAccountId: 'acc_fb-john',
+      accountId: 'acc_fb-john',
       fbPageId: 'fb_page_a',
       encryptedPageToken: 'stale_token_a',
-      status: 'invalid_token',
+      status: 'error',
+      metadata: {},
     });
     storedPages.set('page_row_b', {
       id: 'page_row_b',
-      facebookAccountId: 'acc_fb-john',
+      accountId: 'acc_fb-john',
       fbPageId: 'fb_page_b',
       encryptedPageToken: 'stale_token_b',
-      status: 'paused',
+      status: 'disconnected',
+      metadata: { fb_status: 'paused' },
     });
     storedPages.set('page_row_c', {
       id: 'page_row_c',
-      facebookAccountId: 'acc_fb-john',
+      accountId: 'acc_fb-john',
       fbPageId: 'fb_page_c',
       encryptedPageToken: 'stale_token_c',
       status: 'active',
+      metadata: {},
     });
 
     const reconnectState = await signOAuthState(
@@ -442,9 +456,11 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
       await decryptToken(storedPages.get('page_row_c')!.encryptedPageToken, TEST_ENCRYPTION_KEY)
     ).toBe('fresh_page_token_c');
 
-    // Verify status transition: invalid_token -> active, paused -> paused, active -> active
+    // Verify status transition: error -> active, paused (disconnected
+    // + marker) -> still paused, active -> active
     expect(storedPages.get('page_row_a')!.status).toBe('active');
-    expect(storedPages.get('page_row_b')!.status).toBe('paused');
+    expect(storedPages.get('page_row_b')!.status).toBe('disconnected');
+    expect(storedPages.get('page_row_b')!.metadata.fb_status).toBe('paused');
     expect(storedPages.get('page_row_c')!.status).toBe('active');
 
     // Verify unlinked page was NOT auto-imported
@@ -453,7 +469,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
 
   it('saves the newly authenticated account AND redirects with ?reconnected_mismatch=1 when Facebook returns a different account than expectedFbAccountId (Spec 031)', async () => {
     const { storedAccounts, mockSupabase } = createMockAccountStore();
-    storedAccounts.set(`${userId}:fb-john`, {
+    storedAccounts.set(`ws_multi_123:fb-john`, {
       id: 'acc_fb-john',
       fbAccountId: 'fb-john',
       displayName: 'John Doe',
@@ -507,19 +523,22 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
     );
 
     // Jane Smith is saved as active while John Doe remains untouched in the store
-    expect(storedAccounts.get(`${userId}:fb-jane`)?.displayName).toBe('Jane Smith');
-    expect(storedAccounts.get(`${userId}:fb-jane`)?.status).toBe('active');
-    expect(storedAccounts.get(`${userId}:fb-john`)?.status).toBe('expired');
+    expect(storedAccounts.get(`ws_multi_123:fb-jane`)?.displayName).toBe('Jane Smith');
+    expect(storedAccounts.get(`ws_multi_123:fb-jane`)?.status).toBe('active');
+    expect(storedAccounts.get(`ws_multi_123:fb-john`)?.status).toBe('expired');
   });
 
-  it('updates facebook_pages with encrypted_access_token and no token_expires_at via Supabase, logging errors if any occur', async () => {
+  it('updates destinations with encrypted_destination_token and no token_expires_at via Supabase, logging errors if any occur', async () => {
     const updateSpy = vi.fn();
-    const selectEqMock = {
-      eq: vi.fn().mockReturnThis(),
-      neq: vi.fn().mockResolvedValue({
-        data: [{ id: 'page_123', fb_page_id: 'fb_p_1', status: 'invalid_token' }],
-        error: null,
-      }),
+    const selectEqMock: any = {
+      eq: vi.fn().mockImplementation(() => selectEqMock),
+      then: (resolve: (val: any) => void) =>
+        Promise.resolve({
+          data: [
+            { id: 'page_123', external_destination_id: 'fb_p_1', status: 'error', metadata: {} },
+          ],
+          error: null,
+        }).then(resolve),
     };
     const updateEqMock = {
       eq: vi.fn().mockImplementation((col: string) => {
@@ -532,7 +551,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
 
     const mockSupabase = {
       from: vi.fn().mockImplementation((table: string) => {
-        if (table === 'facebook_pages') {
+        if (table === 'destinations') {
           return {
             select: vi.fn().mockReturnValue(selectEqMock),
             update: updateSpy.mockReturnValue(updateEqMock),
@@ -565,15 +584,16 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
 
     expect(updateSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        encrypted_access_token: expect.any(String),
+        encrypted_destination_token: expect.any(String),
         status: 'active',
       })
     );
     expect(updateSpy.mock.calls[0][0]).not.toHaveProperty('token_expires_at');
     expect(updateSpy.mock.calls[0][0]).not.toHaveProperty('encrypted_page_token');
+    expect(updateSpy.mock.calls[0][0]).not.toHaveProperty('encrypted_access_token');
 
     expect(warnSpy).toHaveBeenCalledWith(
-      '[FacebookOAuth] Failed to update facebook_page token:',
+      '[FacebookOAuth] Failed to update destination token:',
       'database permission denied'
     );
 

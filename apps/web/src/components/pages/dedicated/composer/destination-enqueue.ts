@@ -20,10 +20,11 @@ import type { ComposerMediaItem } from './composer-media-area';
  * endpoint merged as the web-enqueue cutover; Phase 7 gate G4).
  *
  * Until this module landed, the composer + bulk submit paths posted to
- * the legacy page-scoped queue route, whose rows land in
- * `legacy_queue_items` — a table the unified worker never reads. Every
- * create now goes to the destination enqueue endpoint and inserts into
- * the unified `queue_items` the claim pipeline actually drains.
+ * the legacy page-scoped queue route, whose rows landed in the
+ * pre-unification queue table — a table the unified worker never
+ * reads (dropped in Phase 7). Every create now goes to the
+ * destination enqueue endpoint and inserts into the unified
+ * `queue_items` the claim pipeline actually drains.
  *
  * Destination resolution follows the unified surfaces' pattern (spec
  * 123/131): a Facebook Page's destination is the `destinations` row
