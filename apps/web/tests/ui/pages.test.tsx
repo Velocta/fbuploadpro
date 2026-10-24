@@ -116,7 +116,17 @@ function renderAndCaptureTree(
     tree = renderFn();
     return tree;
   }
-  render(<CaptureWrapper />);
+  // PR-131-3: captured components may read through React Query (the
+  // dedicated section frame does) — a provider must sit above the
+  // capture wrapper, whose hooks attach to the wrapper itself.
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <CaptureWrapper />
+    </QueryClientProvider>
+  );
   if (!tree) {
     throw new Error('Failed to capture React element tree');
   }
