@@ -23,6 +23,9 @@
  * fetch-on-mount for initial data. The legacy fetch helpers, their
  * `FetchFn` seam, and the `initial*` test-seam props are deleted with
  * the old files; tests seed through the query client / fetch mocks.
+ * The payload is masked-by-default (spec 139 N3): it carries a secret
+ * hint, never the secret — the value is fetched on demand by the
+ * reveal action when the user chooses Show.
  *
  * Mutations and invalidation (named per spec §6.2): connect (PUT) and
  * disconnect (DELETE) both invalidate
@@ -48,6 +51,7 @@ import { api, buildTenantApiPath, getErrorMessage, isApiError } from '@/lib/api'
 import {
   DeletePlatformCredentialsResponseSchema,
   PlatformCredentialsResponseSchema,
+  RevealPlatformSecretResponseSchema,
   SaveCredentialsResponseSchema,
   type PlatformCredentialsResponse,
 } from '@/lib/api/schemas/settings';
@@ -184,6 +188,17 @@ export function PlatformCredentialsView({
     }
   };
 
+  // Spec 139 N3: the GET payload is masked-by-default — the secret
+  // itself is fetched only when the user chooses Show, through the
+  // dedicated reveal action. The connected view owns the reveal's
+  // loading/error states; this callback is the data path.
+  const handleRevealSecret = React.useCallback(async (): Promise<string> => {
+    const result = await api.post(`${credentialsPath}/reveal`, {}, {
+      schema: RevealPlatformSecretResponseSchema,
+    });
+    return result.appSecret;
+  }, [credentialsPath]);
+
   const handleDisconnect = async (): Promise<void> => {
     try {
       await disconnectMutation.mutateAsync();
@@ -269,8 +284,8 @@ export function PlatformCredentialsView({
           <PlatformConnectedView
             config={config}
             appId={credentials.appId}
-            appSecret={credentials.appSecret}
             connectedAt={credentials.connectedAt}
+            onRevealSecret={handleRevealSecret}
             onEditDetails={() => {
               setServerError(null);
               setIsEditMode(true);

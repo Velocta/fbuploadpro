@@ -16,6 +16,7 @@ import {
   getCredentials,
   platformLabel,
   saveCredentials,
+  toSecretHint,
   type ByocPlatform,
 } from '@/lib/server/platform-credentials';
 
@@ -87,12 +88,18 @@ export async function GET(
 
     const credentials = await getCredentials(workspaceId, byocPlatform, supabase);
 
-    let decryptedSecret = '';
+    // Spec 139 N3: the settings GET never carries the secret itself —
+    // only a masked hint (bullets + last four). The full value is
+    // disclosed solely by the reveal action
+    // (POST …/settings/platform-credentials/[platform]/reveal).
+    let secretHint: string | null = null;
     if (credentials?.encryptedClientSecret) {
       try {
-        decryptedSecret = await decryptToken(credentials.encryptedClientSecret, getTokenEncryptionKey());
+        secretHint = toSecretHint(
+          await decryptToken(credentials.encryptedClientSecret, getTokenEncryptionKey())
+        );
       } catch (err) {
-        console.error('[Platform Credentials API] Failed to decrypt app secret for settings view:', err);
+        console.error('[Platform Credentials API] Failed to decrypt app secret for settings hint:', err);
       }
     }
 
@@ -101,7 +108,7 @@ export async function GET(
       subdomain,
       platform: byocPlatform,
       appId: credentials?.clientId || '',
-      appSecret: decryptedSecret,
+      secretHint,
       hasSecret: Boolean(credentials?.encryptedClientSecret),
       status: credentials?.status || 'unverified',
       lastTestedAt: credentials?.lastTestedAt || null,

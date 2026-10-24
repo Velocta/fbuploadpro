@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
-import { signSessionToken } from '@fbuploadpro/contracts';
+import { encryptToken, signSessionToken } from '@fbuploadpro/contracts';
 import { GET as getBYOC, PUT as saveBYOC, DELETE as deleteBYOC } from '@/app/api/tenant/[subdomain]/settings/byoc/route';
+import { POST as revealBYOCSecret } from '@/app/api/tenant/[subdomain]/settings/byoc/reveal/route';
 import * as authModule from '@/lib/auth/clients';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
@@ -120,9 +121,17 @@ describe('Facebook BYOC Settings API Routes', () => {
       expect(json.fbAppId).toBe('');
       expect(json.hasSecret).toBe(false);
       expect(json.status).toBe('unverified');
+      // Spec 139 N3: no secret saved — the hint is null and there is
+      // no secret field of any kind in the payload.
+      expect(json.fbAppSecretHint).toBeNull();
+      expect(json).not.toHaveProperty('fbAppSecret');
     });
 
-    it('returns 200 with credentials info when BYOC is saved', async () => {
+    it('returns 200 with credentials info when BYOC is saved — masked, never the secret (spec 139 N3)', async () => {
+      // A REAL ciphertext for an obvious fake secret, so the route's
+      // decrypt path genuinely runs and the masking is really tested.
+      const SAVED_SECRET = 'fake-fb-secret-1234';
+      const encryptedSecret = await encryptToken(SAVED_SECRET, TEST_ENCRYPTION_KEY);
       const mockSupabase = {
         from: vi.fn((table: string) => {
           if (table === 'workspaces') return workspaceFound(workspaceId);
@@ -134,7 +143,7 @@ describe('Facebook BYOC Settings API Routes', () => {
                     workspace_id: workspaceId,
                     platform: 'facebook',
                     client_id: '123456789012345',
-                    encrypted_client_secret: 'enc_secret_abc',
+                    encrypted_client_secret: encryptedSecret,
                     status: 'valid',
                     last_tested_at: '2026-10-14T10:00:00Z',
                     created_at: '2026-10-14T09:00:00Z',
@@ -160,6 +169,11 @@ describe('Facebook BYOC Settings API Routes', () => {
       expect(json.status).toBe('valid');
       expect(json.lastTestedAt).toBe('2026-10-14T10:00:00Z');
       expect(json.connectedAt).toBe('2026-10-14T09:00:00Z');
+      // The masked hint (bullets + last four) is all the GET carries.
+      expect(json.fbAppSecretHint).toBe('••••1234');
+      expect(json).not.toHaveProperty('fbAppSecret');
+      // Deep-scan: the full secret appears NOWHERE in the payload.
+      expect(JSON.stringify(json)).not.toContain(SAVED_SECRET);
     });
   });
 
@@ -341,6 +355,113 @@ describe('Facebook BYOC Settings API Routes', () => {
       expect(deleteMock).toHaveBeenCalledTimes(1);
       expect(workspaceEqMock).toHaveBeenCalledWith('workspace_id', workspaceId);
       expect(platformEqMock).toHaveBeenCalledWith('platform', 'facebook');
+    });
+  });
+
+  describe('POST /api/tenant/[subdomain]/settings/byoc/reveal (spec 139 N3)', () => {
+    const SAVED_SECRET = 'fake-fb-secret-1234';
+
+    function savedCredentialsSupabase(encryptedSecret: string | null) {
+      return {
+        from: vi.fn((table: string) => {
+          if (table === 'workspaces') return workspaceFound(workspaceId);
+          if (table === 'platform_credentials') {
+            return {
+              select: () =>
+                selectChain({
+                  data: encryptedSecret
+                    ? {
+                        workspace_id: workspaceId,
+                        platform: 'facebook',
+                        client_id: '123456789012345',
+                        encrypted_client_secret: encryptedSecret,
+                        status: 'valid',
+                        last_tested_at: '2026-10-14T10:00:00Z',
+                        created_at: '2026-10-14T09:00:00Z',
+                      }
+                    : null,
+                  error: null,
+                }),
+            };
+          }
+          return {};
+        }),
+      };
+    }
+
+    function revealRequest(cookie?: string) {
+      return new NextRequest(
+        `http://localhost:3000/api/tenant/${subdomain}/settings/byoc/reveal`,
+        {
+          method: 'POST',
+          headers: cookie ? { cookie } : {},
+        }
+      );
+    }
+
+    it('returns 401 when request lacks authentication session', async () => {
+      const res = await revealBYOCSecret(revealRequest(), {
+        params: Promise.resolve({ subdomain }),
+      });
+      expect(res.status).toBe(401);
+    });
+
+    it('returns 403 when session subdomain does not match request tenant', async () => {
+      const res = await revealBYOCSecret(revealRequest(otherTenantSessionCookie), {
+        params: Promise.resolve({ subdomain }),
+      });
+      expect(res.status).toBe(403);
+    });
+
+    it('returns 404 when workspace is not found for tenant', async () => {
+      const mockSupabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'workspaces') return workspaceMissing();
+          return {};
+        }),
+      };
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(mockSupabase as any);
+
+      const res = await revealBYOCSecret(revealRequest(validSessionCookie), {
+        params: Promise.resolve({ subdomain }),
+      });
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 404 when no secret is saved for the workspace', async () => {
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(
+        savedCredentialsSupabase(null) as any
+      );
+
+      const res = await revealBYOCSecret(revealRequest(validSessionCookie), {
+        params: Promise.resolve({ subdomain }),
+      });
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(JSON.stringify(json)).not.toContain(SAVED_SECRET);
+    });
+
+    it('returns the saved secret once, no-store, and logs the reveal WITHOUT the value', async () => {
+      const encryptedSecret = await encryptToken(SAVED_SECRET, TEST_ENCRYPTION_KEY);
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(
+        savedCredentialsSupabase(encryptedSecret) as any
+      );
+      const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+      const res = await revealBYOCSecret(revealRequest(validSessionCookie), {
+        params: Promise.resolve({ subdomain }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Cache-Control')).toBe('no-store');
+      const json = await res.json();
+      expect(json).toEqual({ fbAppSecret: SAVED_SECRET });
+
+      // The reveal is audited — and the audit line must not carry
+      // the secret value anywhere in any argument.
+      expect(infoSpy).toHaveBeenCalled();
+      for (const call of infoSpy.mock.calls) {
+        expect(JSON.stringify(call)).not.toContain(SAVED_SECRET);
+      }
     });
   });
 });

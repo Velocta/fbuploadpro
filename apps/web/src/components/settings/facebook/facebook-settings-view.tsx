@@ -16,7 +16,9 @@
  * validated by `ByocSettingsResponseSchema` — no raw fetch, no
  * fetch-on-mount for initial data. The legacy `initial*` test-seam
  * props are deleted with the old file; tests seed through the query
- * client / fetch mocks.
+ * client / fetch mocks. The payload is masked-by-default (spec 139
+ * N3): it carries a secret hint, never the secret — the value is
+ * fetched on demand by the reveal action when the user chooses Show.
  *
  * Mutations and invalidation (named per spec §6.2): connect (PUT)
  * and disconnect (DELETE) both invalidate `queryKeys.settings.byoc`
@@ -41,6 +43,7 @@ import { api, buildTenantApiPath, getErrorMessage, isApiError } from '@/lib/api'
 import {
   ByocSettingsResponseSchema,
   DeleteByocResponseSchema,
+  RevealByocSecretResponseSchema,
   SaveCredentialsResponseSchema,
   type ByocSettingsResponse,
 } from '@/lib/api/schemas/settings';
@@ -156,6 +159,17 @@ export function FacebookSettingsView({ subdomain }: Readonly<FacebookSettingsVie
     }
   };
 
+  // Spec 139 N3: the GET payload is masked-by-default — the secret
+  // itself is fetched only when the user chooses Show, through the
+  // dedicated reveal action. The connected view owns the reveal's
+  // loading/error states; this callback is the data path.
+  const handleRevealSecret = React.useCallback(async (): Promise<string> => {
+    const result = await api.post(`${byocPath}/reveal`, {}, {
+      schema: RevealByocSecretResponseSchema,
+    });
+    return result.fbAppSecret;
+  }, [byocPath]);
+
   const handleDisconnect = async (): Promise<void> => {
     try {
       await disconnectMutation.mutateAsync();
@@ -239,8 +253,8 @@ export function FacebookSettingsView({ subdomain }: Readonly<FacebookSettingsVie
         {isConnectedState ? (
           <FacebookConnectedView
             fbAppId={credentials.fbAppId}
-            fbAppSecret={credentials.fbAppSecret}
             connectedAt={credentials.connectedAt}
+            onRevealSecret={handleRevealSecret}
             onEditDetails={() => {
               setServerError(null);
               setIsEditMode(true);

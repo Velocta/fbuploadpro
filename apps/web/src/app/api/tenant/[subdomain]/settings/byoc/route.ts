@@ -15,6 +15,7 @@ import {
   deleteCredentials,
   getCredentials,
   saveCredentials,
+  toSecretHint,
 } from '@/lib/server/platform-credentials';
 
 async function extractSession(request: NextRequest): Promise<SessionPayload | null> {
@@ -55,12 +56,17 @@ export async function GET(
 
     const byoc = await getCredentials(workspaceId, 'facebook', supabase);
 
-    let decryptedSecret = '';
+    // Spec 139 N3: the settings GET never carries the secret itself —
+    // only a masked hint (bullets + last four). The full value is
+    // disclosed solely by the reveal action (POST …/settings/byoc/reveal).
+    let secretHint: string | null = null;
     if (byoc?.encryptedClientSecret) {
       try {
-        decryptedSecret = await decryptToken(byoc.encryptedClientSecret, getTokenEncryptionKey());
+        secretHint = toSecretHint(
+          await decryptToken(byoc.encryptedClientSecret, getTokenEncryptionKey())
+        );
       } catch (err) {
-        console.error('[BYOC Settings API] Failed to decrypt app secret for settings view:', err);
+        console.error('[BYOC Settings API] Failed to decrypt app secret for settings hint:', err);
       }
     }
 
@@ -68,7 +74,7 @@ export async function GET(
       workspaceId,
       subdomain,
       fbAppId: byoc?.clientId || '',
-      fbAppSecret: decryptedSecret,
+      fbAppSecretHint: secretHint,
       hasSecret: Boolean(byoc?.encryptedClientSecret),
       status: byoc?.status || 'unverified',
       lastTestedAt: byoc?.lastTestedAt || null,

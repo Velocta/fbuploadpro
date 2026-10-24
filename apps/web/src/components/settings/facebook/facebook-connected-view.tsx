@@ -9,6 +9,11 @@
  * "Edit details" / "Disconnect" actions, and the "Connected on
  * <date>." line (en-US short month, day, year — as shipped). Copy is
  * §5.2 verbatim.
+ *
+ * Spec 139 N3: the secret value is NOT part of the settings payload —
+ * choosing Show fetches it through the reveal action (`onRevealSecret`)
+ * and keeps it only in this component's memory while shown. A failed
+ * reveal reports inline, at the field, per the form standard.
  */
 
 import * as React from 'react';
@@ -39,21 +44,25 @@ export function formatConnectedDate(dateStr?: string | null): string {
 
 export interface FacebookConnectedViewProps {
   fbAppId: string;
-  fbAppSecret?: string | null | undefined;
   connectedAt?: string | null | undefined;
+  /** Fetches the saved App Secret from the reveal action (spec 139 N3). */
+  onRevealSecret: () => Promise<string>;
   onEditDetails: () => void;
   onDisconnectClick: () => void;
 }
 
 export function FacebookConnectedView({
   fbAppId,
-  fbAppSecret,
   connectedAt,
+  onRevealSecret,
   onEditDetails,
   onDisconnectClick,
 }: Readonly<FacebookConnectedViewProps>) {
   const [copied, setCopied] = React.useState(false);
   const [showSecret, setShowSecret] = React.useState(false);
+  const [revealedSecret, setRevealedSecret] = React.useState<string | null>(null);
+  const [isRevealing, setIsRevealing] = React.useState(false);
+  const [revealError, setRevealError] = React.useState<string | null>(null);
   const feedbackTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   React.useEffect(
@@ -76,6 +85,30 @@ export function FacebookConnectedView({
       // Clipboard unavailable: no "copied" feedback — the App ID
       // stays on screen to copy by hand.
       setCopied(false);
+    }
+  };
+
+  const handleToggleSecret = async () => {
+    if (showSecret) {
+      setShowSecret(false);
+      return;
+    }
+    if (revealedSecret !== null) {
+      setShowSecret(true);
+      return;
+    }
+    // First Show: fetch the value through the reveal action. The
+    // mask stays up until the value is actually in hand.
+    setIsRevealing(true);
+    setRevealError(null);
+    try {
+      const secret = await onRevealSecret();
+      setRevealedSecret(secret);
+      setShowSecret(true);
+    } catch {
+      setRevealError("Couldn't show your App Secret. Please try again.");
+    } finally {
+      setIsRevealing(false);
     }
   };
 
@@ -111,20 +144,30 @@ export function FacebookConnectedView({
             data-testid="fb-saved-app-secret"
             className="font-mono text-body break-all text-ink"
           >
-            {showSecret ? fbAppSecret || MASKED_SECRET : MASKED_SECRET}
+            {showSecret && revealedSecret ? revealedSecret : MASKED_SECRET}
           </span>
           <button
             type="button"
             data-testid="fb-state2-secret-toggle"
-            onClick={() => setShowSecret((previous) => !previous)}
+            onClick={() => void handleToggleSecret()}
+            disabled={isRevealing}
             className="flex min-h-11 shrink-0 items-center px-2 text-metadata font-medium text-ink-sub transition-colors hover:text-ink"
           >
-            {showSecret ? 'Hide' : 'Show'}
+            {isRevealing ? 'Loading…' : showSecret ? 'Hide' : 'Show'}
           </button>
         </div>
-        <span className="text-metadata text-ink-dim">
-          Only you can see this — it stays hidden until you choose to show it.
-        </span>
+        {revealError ? (
+          <span
+            data-testid="fb-secret-reveal-error"
+            className="text-metadata text-brand-rose"
+          >
+            {revealError}
+          </span>
+        ) : (
+          <span className="text-metadata text-ink-dim">
+            Only you can see this — it stays hidden until you choose to show it.
+          </span>
+        )}
       </div>
 
       {/* Actions */}

@@ -19,6 +19,8 @@ import {
   PageDetailResponseSchema,
   PageInsightsResponseSchema,
   PlatformCredentialsResponseSchema,
+  RevealByocSecretResponseSchema,
+  RevealPlatformSecretResponseSchema,
   SaveCredentialsResponseSchema,
   SwitchWorkspaceResponseSchema,
   UploadUrlResponseSchema,
@@ -359,7 +361,7 @@ describe('settings, workspaces and connect schemas', () => {
         workspaceId: UUID,
         subdomain: 'alpha',
         fbAppId: '12345',
-        fbAppSecret: '',
+        fbAppSecretHint: null,
         hasSecret: false,
         status: 'unverified',
         lastTestedAt: null,
@@ -380,13 +382,21 @@ describe('settings, workspaces and connect schemas', () => {
         subdomain: 'alpha',
         platform: 'instagram',
         appId: '678',
-        appSecret: 'secret',
+        secretHint: '••••cret',
         hasSecret: true,
         status: 'valid',
         lastTestedAt: ISO,
         connectedAt: ISO,
       }).platform
     ).toBe('instagram');
+    // The reveal actions (spec 139 N3) are the only payloads that
+    // carry the secret itself.
+    expect(RevealByocSecretResponseSchema.parse({ fbAppSecret: 'secret' }).fbAppSecret).toBe(
+      'secret'
+    );
+    expect(RevealPlatformSecretResponseSchema.parse({ appSecret: 'secret' }).appSecret).toBe(
+      'secret'
+    );
   });
 
   it('parses workspace list, mutation and switch payloads', () => {
