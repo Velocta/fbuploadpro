@@ -4,6 +4,7 @@ import {
   type DestinationEnqueueIntent,
   type DestinationEnqueueKind,
   type FacebookDestinationOptions,
+  type InstagramPlatformOptions,
   type Platform,
   type PostFormat,
 } from '@fbuploadpro/contracts';
@@ -190,6 +191,112 @@ export type DestinationEnqueueWireRequest = {
 export async function submitDestinationEnqueue(
   subdomain: string,
   request: FacebookEnqueueRequest | DestinationEnqueueWireRequest
+) {
+  return api.post(buildTenantApiPath(subdomain, DESTINATION_ENQUEUE_PATH), request, {
+    schema: DestinationEnqueueResponseSchema,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Instagram (spec 132 PR-C3)
+// ---------------------------------------------------------------------------
+
+/** The Instagram slice of the contracts enqueue request, spelled out
+ *  field-for-field like the Facebook slice above (same widening
+ *  rationale; the wire shape is server-validated). */
+export interface InstagramEnqueueRequest {
+  platform: 'instagram';
+  destinationId: string;
+  kind: DestinationEnqueueKind;
+  platformFormat?: string | null;
+  caption: string;
+  firstComment?: string | null;
+  mediaItemIds: string[];
+  intent: DestinationEnqueueIntent;
+  scheduledAt?: string;
+  slotId?: string;
+  platformOptions?: InstagramPlatformOptions;
+}
+
+export type InstagramEnqueueFormat = 'photo' | 'reel' | 'carousel' | 'story';
+
+export interface InstagramEnqueueShape {
+  format: InstagramEnqueueFormat;
+  caption: string;
+  firstComment: string;
+  /** Selected media in post order. The unified row stores the first as
+   *  its primary media; a carousel's full list travels in
+   *  `platformOptions.carouselItems`, per the endpoint's contract. */
+  items: Array<Pick<ComposerMediaItem, 'id' | 'mediaType' | 'url'>>;
+  /** Platform options assembled + validated against
+   *  `InstagramPlatformOptionsSchema` by the composer (carouselItems
+   *  excluded — the builder derives them from `items`). */
+  options: InstagramPlatformOptions;
+  intent: ComposerIntent;
+  scheduleDate: Date | null;
+}
+
+/**
+ * Maps the Instagram composer's format/intent vocabulary onto the
+ * unified enqueue contract (pure — unit-tested without the network):
+ *   - photo is an `image` kind; Reel is a `video` kind carrying the
+ *     `reel` platform format (the worker publisher reads exactly this);
+ *   - carousel is a `carousel` kind whose full item list (in selection
+ *     order) rides in `platformOptions.carouselItems`;
+ *   - a Story carries no caption and no first comment — the publisher
+ *     ignores both for stories, so they are never sent;
+ *   - 'schedule' is the contract's 'scheduled', with `scheduledAt`;
+ *     'queue' carries no time and no slot pin (server-resolved).
+ */
+export function buildInstagramEnqueueRequest(
+  destinationId: string,
+  shape: InstagramEnqueueShape
+): InstagramEnqueueRequest {
+  const { format, items, intent, scheduleDate } = shape;
+  const isStory = format === 'story';
+
+  const request: InstagramEnqueueRequest = {
+    platform: 'instagram',
+    destinationId,
+    kind:
+      format === 'photo'
+        ? 'image'
+        : format === 'reel'
+          ? 'video'
+          : format === 'carousel'
+            ? 'carousel'
+            : 'story',
+    platformFormat: format === 'reel' ? 'reel' : null,
+    caption: isStory ? '' : shape.caption,
+    mediaItemIds: items[0] ? [items[0].id] : [],
+    intent:
+      intent === 'schedule' ? 'scheduled' : intent === 'now' ? 'now' : 'queue',
+  };
+
+  if (!isStory) {
+    const firstComment = shape.firstComment.trim();
+    if (firstComment) request.firstComment = firstComment;
+  }
+  if (intent === 'schedule' && scheduleDate) {
+    request.scheduledAt = scheduleDate.toISOString();
+  }
+  if (!isStory) {
+    const options: InstagramPlatformOptions = { ...shape.options };
+    if (format === 'carousel') {
+      options.carouselItems = items.map((item) => ({
+        mediaUrl: item.url,
+        mediaType: item.mediaType,
+      }));
+    }
+    if (Object.keys(options).length > 0) request.platformOptions = options;
+  }
+  return request;
+}
+
+/** Submits one Instagram enqueue and validates the created-item body. */
+export async function submitInstagramEnqueue(
+  subdomain: string,
+  request: InstagramEnqueueRequest
 ) {
   return api.post(buildTenantApiPath(subdomain, DESTINATION_ENQUEUE_PATH), request, {
     schema: DestinationEnqueueResponseSchema,
