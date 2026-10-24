@@ -141,6 +141,7 @@ export async function installApiFixtures(
       ],
       total: 1,
     })
+  );
 
   // Page insights (spec 131 PR-131-3): schema-complete response in the
   // PageInsightsResponseSchema shape so the insights tab renders its
