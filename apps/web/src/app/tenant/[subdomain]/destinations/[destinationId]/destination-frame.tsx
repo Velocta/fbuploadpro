@@ -100,6 +100,23 @@ const YouTubeComposer = dynamic(
   }
 );
 
+/**
+ * The TikTok composer (spec 132 G-TT) loads on demand into the same
+ * composer slot for TikTok destinations — same bundle discipline.
+ */
+const TikTokComposer = dynamic(
+  () =>
+    import(
+      '@/components/pages/dedicated/destination-composer/tiktok-composer'
+    ).then((m) => ({
+      default: m.TikTokComposer,
+    })),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-40 w-full" />,
+  }
+);
+
 export const DESTINATION_NOT_FOUND_MESSAGE =
   "We couldn't find this destination.";
 export const DESTINATION_LOAD_ERROR_MESSAGE =
@@ -357,6 +374,10 @@ export function DestinationSlots({
         ) : destination.platform === 'youtube' ? (
           <div className="mt-4">
             <YouTubeComposer subdomain={subdomain} destination={destination} />
+          </div>
+        ) : destination.platform === 'tiktok' ? (
+          <div className="mt-4">
+            <TikTokComposer subdomain={subdomain} destination={destination} />
           </div>
         ) : undefined}
       </DestinationSlot>
