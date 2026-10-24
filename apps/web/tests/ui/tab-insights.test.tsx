@@ -142,8 +142,9 @@ describe('PageTabInsights — data-layer conversion (spec 131 PR-131-3)', () => 
   it('never touches localStorage (the legacy cache is deleted, §8.6)', async () => {
     renderInsights();
     expect(await screen.findByTestId('insights-kpi-grid')).toBeVisible();
-    const insightsKeys = getItemSpy.mock.calls.filter(([key]) =>
-      String(key).startsWith('insights:')
+    const calls = getItemSpy.mock.calls as unknown as unknown[][];
+    const insightsKeys = calls.filter((call) =>
+      String(call[0]).startsWith('insights:')
     );
     expect(insightsKeys).toHaveLength(0);
   });

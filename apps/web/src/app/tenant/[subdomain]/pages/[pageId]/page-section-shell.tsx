@@ -198,6 +198,22 @@ export default function TenantDedicatedPageView({
     () => queueQuery.data?.items ?? [],
     [queueQuery.data]
   );
+  const dashboardQueueItems = React.useMemo(
+    () =>
+      queueItems.map((item) => ({
+        id: item.id,
+        mediaId: item.mediaId,
+        postFormat: item.postFormat,
+        linkUrl: item.linkUrl ?? null,
+        caption: item.caption ?? null,
+        firstComment: item.firstComment ?? null,
+        scheduledTime: item.scheduledTime,
+        status: item.status,
+        ...(item.media ? { mediaType: item.media.mediaType } : {}),
+        thumbnailUrl: item.media?.thumbnailUrl ?? null,
+      })),
+    [queueItems]
+  );
   const queuedCount = React.useMemo(
     () => queueItems.filter((i) => i.status === 'queued').length,
     [queueItems]
@@ -237,10 +253,7 @@ export default function TenantDedicatedPageView({
 
   const statusMutation = useMutation({
     mutationFn: (nextStatus: 'active' | 'paused') =>
-      api.patch(pagePath, {
-        schema: UpdatePageResponseSchema,
-        body: { status: nextStatus },
-      }),
+      api.patch(pagePath, { status: nextStatus }, { schema: UpdatePageResponseSchema }),
     onSuccess: (_data, nextStatus) => {
       invalidatePage();
       toast.success(
@@ -264,9 +277,11 @@ export default function TenantDedicatedPageView({
 
   const publishNowMutation = useMutation({
     mutationFn: (itemId: string) =>
-      api.post(buildTenantApiPath(subdomain, `/publishing/queue/${itemId}/publish-now`), {
-        schema: AckSchema,
-      }),
+      api.post(
+        buildTenantApiPath(subdomain, `/publishing/queue/${itemId}/publish-now`),
+        undefined,
+        { schema: AckSchema }
+      ),
     onSuccess: () => {
       invalidateQueue();
       toast.success('Publishing triggered successfully.');
@@ -284,15 +299,16 @@ export default function TenantDedicatedPageView({
 
   const addSlotMutation = useMutation({
     mutationFn: (slotData: { slotTime: string; timezone: string; allowedFormats?: string[] }) =>
-      api.post(slotsPath, {
-        schema: AckSchema,
-        body: {
+      api.post(
+        slotsPath,
+        {
           pageId,
           slotTime: slotData.slotTime,
           timezone: slotData.timezone,
           allowedFormats: slotData.allowedFormats,
         },
-      }),
+        { schema: AckSchema }
+      ),
     onSuccess: () => {
       invalidateSlots();
       toast.success('Recurring publishing slot added.');
@@ -312,10 +328,11 @@ export default function TenantDedicatedPageView({
 
   const timezoneMutation = useMutation({
     mutationFn: (newTimezone: string) =>
-      api.patch(slotsPath, {
-        schema: UpdateScheduleTimezoneResponseSchema,
-        body: { timezone: newTimezone },
-      }),
+      api.patch(
+        slotsPath,
+        { timezone: newTimezone },
+        { schema: UpdateScheduleTimezoneResponseSchema }
+      ),
     onSuccess: (data, newTimezone) => {
       invalidateSlots();
       invalidateQueue();
@@ -343,10 +360,11 @@ export default function TenantDedicatedPageView({
 
   const toggleSlotMutation = useMutation({
     mutationFn: ({ slotId, isActive }: { slotId: string; isActive: boolean }) =>
-      api.patch(buildTenantApiPath(subdomain, `/pages/${pageId}/slots/${slotId}`), {
-        schema: AckSchema,
-        body: { isActive },
-      }),
+      api.patch(
+        buildTenantApiPath(subdomain, `/pages/${pageId}/slots/${slotId}`),
+        { isActive },
+        { schema: AckSchema }
+      ),
     onSuccess: () => {
       invalidateSlots();
     },
@@ -519,7 +537,7 @@ export default function TenantDedicatedPageView({
               <TabsContent value="dashboard" forceMount>
                 <PageTabDashboard
                   page={page}
-                  queueItems={queueItems}
+                  queueItems={dashboardQueueItems}
                   slots={slots}
                   onPublishNow={handlePublishNow}
                   onSwitchTab={switchTab}
