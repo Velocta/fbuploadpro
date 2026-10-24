@@ -65,6 +65,12 @@
         "routeSpecificGzipBytes": 25936,
         "routeSpecificRawBytes": 79877
       },
+      "/tenant/[subdomain]/prompts": {
+        "firstLoadGzipBytes": 159582,
+        "firstLoadRawBytes": 529526,
+        "routeSpecificGzipBytes": 25703,
+        "routeSpecificRawBytes": 78603
+      },
       "/tenant/[subdomain]/tiktok/accounts": {
         "firstLoadGzipBytes": 159403,
         "firstLoadRawBytes": 529620,
@@ -116,8 +122,8 @@
       "/forgot-password": {
         "firstLoadGzipBytes": 145447,
         "firstLoadRawBytes": 481374,
-        "routeSpecificGzipBytes": 11599,
-        "routeSpecificRawBytes": 30422
+        "routeSpecificGzipBytes": 13188,
+        "routeSpecificRawBytes": 35543
       },
       "/connect/facebook/error": {
         "firstLoadGzipBytes": 144987,
@@ -213,8 +219,8 @@
       "/forgot-password": {
         "firstLoadGzipBytes": 152720,
         "firstLoadRawBytes": 505443,
-        "routeSpecificGzipBytes": 12179,
-        "routeSpecificRawBytes": 31944
+        "routeSpecificGzipBytes": 13847,
+        "routeSpecificRawBytes": 37320
       },
       "/login": {
         "firstLoadGzipBytes": 153250,
@@ -293,6 +299,12 @@
         "firstLoadRawBytes": 737785,
         "routeSpecificGzipBytes": 70122,
         "routeSpecificRawBytes": 264285
+      },
+      "/tenant/[subdomain]/prompts": {
+        "firstLoadGzipBytes": 167561,
+        "firstLoadRawBytes": 556002,
+        "routeSpecificGzipBytes": 26988,
+        "routeSpecificRawBytes": 82533
       },
       "/tenant/[subdomain]/settings": {
         "firstLoadGzipBytes": 170245,

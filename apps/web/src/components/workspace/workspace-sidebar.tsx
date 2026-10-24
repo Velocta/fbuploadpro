@@ -132,6 +132,7 @@ export function WorkspaceSidebar({
   const mediaHref = href('/media');
   const downloaderHref = href('/downloader');
   const fdolaStudioHref = href('/fdola-studio');
+  const promptsHref = href('/prompts');
   const accountsHref = href('/accounts');
   const pagesHref = href('/pages');
 
@@ -142,6 +143,9 @@ export function WorkspaceSidebar({
   );
   const isFdolaStudioActive = effectivePath.startsWith(
     normalizeTenantPath(fdolaStudioHref, subdomain)
+  );
+  const isPromptsActive = effectivePath.startsWith(
+    normalizeTenantPath(promptsHref, subdomain)
   );
   const isAccountsActive = effectivePath.startsWith(normalizeTenantPath(accountsHref, subdomain));
   const isPagesActive = effectivePath.startsWith(normalizeTenantPath(pagesHref, subdomain));
@@ -222,6 +226,18 @@ export function WorkspaceSidebar({
           <rect x="2" y="3" width="20" height="14" rx="2" />
           <line x1="8" x2="16" y1="21" y2="21" />
           <line x1="12" x2="12" y1="17" y2="21" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Prompt Library',
+      href: promptsHref,
+      isActive: isPromptsActive,
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M9 18h6" />
+          <path d="M10 22h4" />
+          <path d="M12 2a7 7 0 0 0-4 12c.7.6 1 1.4 1 2h6c0-.6.3-1.4 1-2a7 7 0 0 0-4-12z" />
         </svg>
       ),
     },
