@@ -40,6 +40,18 @@ export const FACEBOOK_PAGE = {
   createdAt: '2026-10-01T00:00:00.000Z',
 } as const;
 
+/** The unified destination the seeded Facebook Page resolves to
+ *  (destinations.external_destination_id = the page's Facebook id). */
+export const FACEBOOK_DESTINATION = {
+  id: '77777777-7777-4777-8777-777777777777',
+  externalDestinationId: FACEBOOK_PAGE.fbPageId,
+  name: FACEBOOK_PAGE.pageName,
+  handle: null,
+  avatarUrl: null,
+  timezone: 'UTC',
+  status: 'active',
+} as const;
+
 export const CONNECTED_ACCOUNT = {
   id: '33333333-3333-4333-8333-333333333333',
   fbAccountId: '100000000000099',

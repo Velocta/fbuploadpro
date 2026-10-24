@@ -51,23 +51,76 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+const DESTINATION_ID = '55555555-5555-4555-8555-555555555555';
+
+const SOCIAL_LIST = {
+  accounts: [
+    {
+      id: '66666666-6666-4666-8666-666666666666',
+      platform: 'facebook',
+      externalAccountId: 'fb-acct',
+      displayName: 'FB',
+      avatarUrl: null,
+      status: 'active',
+      tokenExpiresAt: null,
+      destinations: [
+        {
+          id: DESTINATION_ID,
+          externalDestinationId: 'fb-page-bulk',
+          name: 'Acme Page',
+          handle: null,
+          avatarUrl: null,
+          timezone: 'UTC',
+          status: 'active',
+        },
+      ],
+    },
+  ],
+};
+
 interface FetchBehaviour {
   bulkStatus?: number;
   bulkBody?: unknown;
+  /** Fail the Nth (0-based) per-item enqueue with this message. */
+  failItemIndex?: number;
+  failMessage?: string;
   mediaStatus?: number;
 }
 
 function makeFetch(behaviour: FetchBehaviour, bulkPosts: Array<Record<string, unknown>>) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (url.includes('/publishing/queue/bulk') && init?.method === 'POST') {
+    if (url.includes('/accounts/social')) {
+      return jsonResponse(SOCIAL_LIST);
+    }
+    if (url.includes('/pages/')) {
+      return jsonResponse({ page: { fbPageId: 'fb-page-bulk' } });
+    }
+    if (url.includes('/publishing/destination-queue') && init?.method === 'POST') {
       const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      const itemIndex = bulkPosts.length;
       bulkPosts.push(body);
       if (behaviour.bulkBody !== undefined) {
         return jsonResponse(behaviour.bulkBody, behaviour.bulkStatus ?? 200);
       }
-      const items = (body.items as unknown[] | undefined) ?? [];
-      return jsonResponse({ results: items.map(() => ({ ok: true })) });
+      if (behaviour.failItemIndex === itemIndex) {
+        return jsonResponse({ message: behaviour.failMessage ?? 'Failed' }, 400);
+      }
+      return jsonResponse(
+        {
+          id: '77777777-7777-4777-8777-777777777777',
+          workspaceId: '88888888-8888-4888-8888-888888888888',
+          destinationId: DESTINATION_ID,
+          platform: 'facebook',
+          kind: body.kind,
+          platformFormat: body.platformFormat ?? null,
+          status: 'queued',
+          scheduledTime: body.scheduledAt ?? '2026-12-01T09:00:00.000Z',
+          slotId: null,
+          createdAt: '2026-10-24T00:00:00.000Z',
+        },
+        201
+      );
     }
     if (url.includes('/media')) {
       if (behaviour.mediaStatus && behaviour.mediaStatus !== 200) {
@@ -147,7 +200,7 @@ describe('BulkAddModal — full-page rebuild (spec 132 PR-C2)', () => {
     expect(screen.getByTestId('bulk-selected-counter')).toHaveTextContent('Up to 150 posts per run.');
   });
 
-  it('walks media → details → review and submits per-row captions to the bulk endpoint', async () => {
+  it('walks media → details → review and submits per-row captions to the unified enqueue', async () => {
     const user = userEvent.setup();
     const bulkPosts: Array<Record<string, unknown>> = [];
     const { props } = renderBulk(makeFetch({}, bulkPosts));
@@ -166,16 +219,24 @@ describe('BulkAddModal — full-page rebuild (spec 132 PR-C2)', () => {
     const summary = await screen.findByTestId('bulk-summary');
     expect(summary).toHaveTextContent('2 added to queue, 0 failed');
 
-    expect(bulkPosts).toHaveLength(1);
-    const body = bulkPosts[0] as unknown as {
-      pageId: string;
-      items: Array<{ mediaId: string; format: string; caption: string; scheduledTime: string }>;
-    };
-    expect(body.pageId).toBe(PAGE_ID);
-    expect(body.items).toHaveLength(2);
-    expect(body.items[0]).toMatchObject({ mediaId: IMG_1, format: 'image', caption: 'Library caption one' });
-    expect(body.items[1]).toMatchObject({ mediaId: IMG_2, format: 'image', caption: 'Beach day' });
-    expect(body.items[0]?.scheduledTime).toBeTruthy();
+    // One unified destination enqueue per row (the unified backend has
+    // no bulk endpoint), each carrying its row's caption + media and
+    // the review step's scheduled time as the scheduled intent.
+    expect(bulkPosts).toHaveLength(2);
+    expect(bulkPosts[0]).toMatchObject({
+      platform: 'facebook',
+      destinationId: DESTINATION_ID,
+      kind: 'image',
+      caption: 'Library caption one',
+      mediaItemIds: [IMG_1],
+      intent: 'scheduled',
+    });
+    expect(bulkPosts[1]).toMatchObject({
+      caption: 'Beach day',
+      mediaItemIds: [IMG_2],
+    });
+    expect(bulkPosts[0]).not.toHaveProperty('pageId');
+    expect(String(bulkPosts[0]?.scheduledAt)).toBeTruthy();
 
     // Completion fires from the summary's Done — not at submit time — so
     // the summary can actually be read (the legacy overlay closed first).
@@ -190,7 +251,7 @@ describe('BulkAddModal — full-page rebuild (spec 132 PR-C2)', () => {
     const bulkPosts: Array<Record<string, unknown>> = [];
     renderBulk(
       makeFetch(
-        { bulkBody: { results: [{ ok: true }, { ok: false, error: 'That file could not be added.' }] } },
+        { failItemIndex: 1, failMessage: 'That file could not be added.' },
         bulkPosts
       )
     );
@@ -266,7 +327,7 @@ describe('BulkAddModal — full-page rebuild (spec 132 PR-C2)', () => {
     expect(screen.getByTestId('bulk-submit-btn')).toHaveTextContent('Add 1 post to queue');
     await user.click(screen.getByTestId('bulk-submit-btn'));
     expect(await screen.findByTestId('bulk-summary')).toHaveTextContent('1 added to queue, 0 failed');
-    const body = bulkPosts[0] as unknown as { items: unknown[] };
-    expect(body.items).toHaveLength(1);
+    expect(bulkPosts).toHaveLength(1);
+    expect(bulkPosts[0]?.mediaItemIds).toHaveLength(1);
   });
 });

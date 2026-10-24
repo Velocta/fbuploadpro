@@ -81,8 +81,9 @@ export interface PostComposerProps {
 }
 
 /**
- * Page-read shape the composer consumes (name + D5 cooldown status).
- * Lenient by design: the composer only reads these two fields, and the
+ * Page-read shape the composer consumes (name + D5 cooldown status +
+ * the Facebook page id the unified destination resolution keys on).
+ * Lenient by design: the composer only reads these fields, and the
  * failure mode that matters — a failed read — still throws through the
  * typed client and leaves the "your Page" fallback, exactly as before.
  */
@@ -91,6 +92,7 @@ const ComposerPageResponseSchema = z
     page: z
       .object({
         pageName: z.string(),
+        fbPageId: z.string().nullable().optional(),
         status: z.string().optional(),
         rateLimitedAt: z.string().nullable().optional(),
       })
@@ -235,6 +237,7 @@ export function PostComposer({
           : await submitCreatePost({
               pageId,
               subdomain,
+              fbPageId: pageQuery.data?.page.fbPageId ?? null,
               format: submitted.format,
               items,
               caption: submitted.caption,

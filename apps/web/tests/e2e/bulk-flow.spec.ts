@@ -5,10 +5,10 @@
  * full page, OD132-1 (a)), choose two library items, walk Details
  * (queue destination + successive-slot range) → Review (per-row caption
  * state) → submit, and assert the engineered end summary with per-row
- * state. A second case returns a per-row failure from the bulk endpoint
- * and asserts it is reported on that row. The bulk POST and every other
- * API call stay inside the intercepted fixture boundary — nothing
- * reaches Facebook.
+ * state. A second case returns a per-row failure from that row's
+ * unified destination enqueue and asserts it is reported on that row.
+ * The enqueue POSTs and every other API call stay inside the
+ * intercepted fixture boundary — nothing reaches Facebook.
  *
  * The mobile describe block is the spec 142 gate for this surface:
  * 320 / 390 / 768 CSS px — no horizontal overflow, ≥44px primary
@@ -34,7 +34,7 @@ interface BulkHarness {
 
 async function installBulkFixtures(
   page: Page,
-  bulkResults?: Array<Record<string, unknown>>
+  failure?: { failItemIndex: number; failMessage: string }
 ): Promise<BulkHarness> {
   const state = createFixtureState({
     media: [
@@ -44,19 +44,39 @@ async function installBulkFixtures(
   });
   await installApiFixtures(page, state);
   const bulkRequests: Array<Record<string, unknown>> = [];
-  // Registered after installApiFixtures so it wins over the generic
-  // queue route for the bulk endpoint (Playwright matches in reverse
-  // registration order).
-  await page.route(`**/api/tenant/${SUB}/publishing/queue/bulk`, async (route) => {
+  // Registered after installApiFixtures so it wins over the shared
+  // destination-enqueue fixture (Playwright matches in reverse
+  // registration order). Since the G4 retarget the bulk flow submits
+  // one unified destination enqueue per row — this stub records each
+  // request and answers with the contracts enqueue shape (or the
+  // configured per-row failure).
+  await page.route(`**/api/tenant/${SUB}/publishing/destination-queue`, async (route) => {
     const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>;
+    const itemIndex = bulkRequests.length;
     bulkRequests.push(body);
-    const items = Array.isArray(body.items) ? body.items : [];
-    const results =
-      bulkResults ?? items.map(() => ({ ok: true }));
+    if (failure && failure.failItemIndex === itemIndex) {
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: failure.failMessage }),
+      });
+      return;
+    }
     await route.fulfill({
-      status: 200,
+      status: 201,
       contentType: 'application/json',
-      body: JSON.stringify({ results }),
+      body: JSON.stringify({
+        id: '77777777-7777-4777-8777-777777777777',
+        workspaceId: '99999999-9999-4999-8999-999999999999',
+        destinationId: '77777777-7777-4777-8777-777777777777',
+        platform: 'facebook',
+        kind: body.kind ?? 'image',
+        platformFormat: body.platformFormat ?? null,
+        status: 'queued',
+        scheduledTime: body.scheduledAt ?? '2026-12-01T09:00:00.000Z',
+        slotId: null,
+        createdAt: '2026-10-20T00:00:00.000Z',
+      }),
     });
   });
   return { state, bulkRequests };
@@ -111,11 +131,18 @@ test.describe('bulk creation flow (spec 132 PR-C2)', () => {
     await expect(summary).toBeVisible();
     await expect(summary).toContainText('2 added to queue, 0 failed');
 
-    expect(bulkRequests).toHaveLength(1);
-    const items = (bulkRequests[0] as { items: Array<Record<string, unknown>> }).items;
-    expect(items).toHaveLength(2);
-    expect(items[0]).toMatchObject({ mediaId: IMG_1, caption: 'Bulk caption one' });
-    expect(items[1]).toMatchObject({ mediaId: IMG_2, caption: 'Second bulk caption' });
+    expect(bulkRequests).toHaveLength(2);
+    expect(bulkRequests[0]).toMatchObject({
+      platform: 'facebook',
+      kind: 'image',
+      mediaItemIds: [IMG_1],
+      caption: 'Bulk caption one',
+      intent: 'scheduled',
+    });
+    expect(bulkRequests[1]).toMatchObject({
+      mediaItemIds: [IMG_2],
+      caption: 'Second bulk caption',
+    });
 
     // Done completes the flow and the host closes it.
     await bulk.getByTestId('bulk-summary-done-btn').click();
@@ -127,10 +154,10 @@ test.describe('bulk creation flow (spec 132 PR-C2)', () => {
     context,
   }) => {
     await context.addCookies([SESSION_COOKIE]);
-    await installBulkFixtures(page, [
-      { ok: true },
-      { ok: false, error: 'That file could not be added.' },
-    ]);
+    await installBulkFixtures(page, {
+      failItemIndex: 1,
+      failMessage: 'That file could not be added.',
+    });
     await openBulk(page);
     const bulk = await pickTwoAndReview(page);
     await bulk.getByTestId('bulk-submit-btn').click();
