@@ -367,7 +367,11 @@ export function DestinationSlots({
         description="The composer for this destination will open here once it is available."
       >
         {destination.platform === 'instagram' ? (
-          <InstagramComposerSlot subdomain={subdomain} destination={destination} />
+          <InstagramComposerSlot
+            subdomain={subdomain}
+            destination={destination}
+            accountType={destination.accountType}
+          />
         ) : destination.platform === 'x' ? (
           <div className="mt-4">
             <XComposer subdomain={subdomain} destination={destination} />

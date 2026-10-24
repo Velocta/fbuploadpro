@@ -13,6 +13,7 @@
  */
 import {
   decryptToken,
+  destinationAccountTypeFromMetadata,
   encryptToken,
   getTokenEncryptionKey,
   type DatabaseClient,
@@ -41,6 +42,14 @@ export interface SocialDestinationView {
   avatarUrl: string | null;
   timezone: string;
   status: string;
+  /**
+   * The provider-reported account type from `destinations.metadata`
+   * (`account_type`), e.g. Instagram's 'BUSINESS' / 'MEDIA_CREATOR'.
+   * Null when the destination's connect never persisted one (every
+   * destination connected before the type was recorded) — unknown,
+   * never guessed.
+   */
+  accountType: string | null;
 }
 
 export interface SocialAccountView {
@@ -441,7 +450,54 @@ function mapDestinationRow(row: Record<string, any>): SocialDestinationView {
     avatarUrl: row.avatar_url ?? row.avatarUrl ?? null,
     timezone: row.timezone ?? 'UTC',
     status: row.status ?? STATUS_ACTIVE,
+    accountType: destinationAccountTypeFromMetadata(row.metadata),
   };
+}
+
+/**
+ * Merges a patch into the `metadata` JSONB of every row in `table`
+ * matching ALL of `match` (column → value). The framework's persist
+ * step owns row creation; platform complete routes use this for the
+ * platform-specific metadata the framework has no field for (the
+ * TikTok/YouTube provider account ref, the Instagram account type).
+ * The merge is an UPDATE, so a reconnect refreshes the metadata of
+ * destinations that already exist — it never creates rows.
+ */
+export async function mergeRowMetadata(
+  client: ConnectDbClient | null | undefined,
+  table: 'social_accounts' | 'destinations',
+  match: Record<string, string>,
+  patch: Record<string, unknown>
+): Promise<void> {
+  if (isLegacyClient(client ?? undefined)) {
+    const legacy = client as DatabaseClient;
+    const conditions = Object.keys(match)
+      .map((column, index) => `${column} = $${index + 2}`)
+      .join(' AND ');
+    await legacy.query(
+      `UPDATE ${table} SET metadata = COALESCE(metadata, '{}'::jsonb) || $1::jsonb WHERE ${conditions}`,
+      [JSON.stringify(patch), ...Object.values(match)]
+    );
+    return;
+  }
+
+  const supabase = getRouteSupabase(client ?? undefined);
+  if (!supabase) return;
+  let query = supabase.from(table).select('id, metadata');
+  for (const [column, value] of Object.entries(match)) {
+    query = query.eq(column, value);
+  }
+  const { data, error } = await query;
+  if (error || !data) return;
+  for (const row of data as Array<{
+    id: string;
+    metadata: Record<string, unknown> | null;
+  }>) {
+    await supabase
+      .from(table)
+      .update({ metadata: { ...(row.metadata ?? {}), ...patch } })
+      .eq('id', row.id);
+  }
 }
 
 /**

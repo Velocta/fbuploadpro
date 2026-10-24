@@ -90,11 +90,12 @@ export interface InstagramComposerProps {
   destination: InstagramComposerDestination;
   /**
    * The destination's Instagram account type ('BUSINESS' / 'CREATOR'),
-   * when the surface calling the composer knows it. The 131-4 frame
-   * does NOT surface it today (the connect flow reads `account_type`
-   * only to enforce the Professional rule and never persists it), so
-   * the frame passes nothing and Stories stay unoffered — the §4.1
-   * fallback — until the type is surfaced on the destination read.
+   * when the surface calling the composer knows it. The connect flow
+   * persists the provider-reported type into `destinations.metadata`
+   * and the 131-4 frame surfaces it on the destination detail, so the
+   * frame passes it here. When it is absent (a destination connected
+   * before the type was persisted, not yet reconnected), Stories stay
+   * unoffered — the §4.1 fallback.
    */
   accountType?: string | null | undefined;
   onClose: () => void;

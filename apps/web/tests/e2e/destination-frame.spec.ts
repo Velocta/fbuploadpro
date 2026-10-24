@@ -29,6 +29,7 @@ const DESTINATION = {
   avatarUrl: null,
   timezone: 'UTC',
   status: 'active',
+  accountType: null,
   platform: 'instagram',
   account: {
     id: 'acct-1',

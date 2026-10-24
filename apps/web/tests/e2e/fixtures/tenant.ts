@@ -50,6 +50,7 @@ export const FACEBOOK_DESTINATION = {
   avatarUrl: null,
   timezone: 'UTC',
   status: 'active',
+  accountType: null,
 } as const;
 
 export const CONNECTED_ACCOUNT = {

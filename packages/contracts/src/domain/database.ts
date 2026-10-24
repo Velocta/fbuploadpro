@@ -188,6 +188,46 @@ export const DatabaseSocialAccountRowSchema = z
 export type DatabaseSocialAccountRow = z.infer<typeof DatabaseSocialAccountRowSchema>;
 
 /**
+ * Typed view over a `destinations.metadata` JSONB bag. The bag stays
+ * open — platforms keep their own keys in it (e.g. the TikTok/YouTube
+ * `providerAccountId` the Post-for-Me publishers read) — so unknown
+ * keys pass through untouched; the keys modelled here are validated.
+ *
+ * `account_type` is the provider-reported account type of the
+ * destination's account (Instagram: 'BUSINESS' / 'MEDIA_CREATOR' /
+ * 'CREATOR', exactly as the Instagram API reports it). The Instagram
+ * connect flow persists it at connect time; the worker's Instagram
+ * publisher reads it for the Business-only story gate, and the web
+ * destination detail surfaces it so the composer can offer Stories
+ * only to known-Business destinations (spec 132 §4.1). A destination
+ * connected before this field existed carries no `account_type` —
+ * readers must treat that as "unknown", never guess a type.
+ */
+export const DatabaseDestinationMetadataSchema = z
+  .object({
+    account_type: z.string().min(1).max(64).optional(),
+  })
+  .passthrough();
+
+export type DatabaseDestinationMetadata = z.infer<
+  typeof DatabaseDestinationMetadataSchema
+>;
+
+/**
+ * The destination's provider-reported account type from its metadata,
+ * or null when the metadata carries none (unknown — never guessed).
+ * Malformed metadata also yields null here; row-level validation
+ * (DatabaseDestinationRowSchema) is the loud boundary.
+ */
+export function destinationAccountTypeFromMetadata(
+  metadata: unknown
+): string | null {
+  const parsed = DatabaseDestinationMetadataSchema.safeParse(metadata);
+  if (!parsed.success) return null;
+  return parsed.data.account_type ?? null;
+}
+
+/**
  * Runtime schema for a `destinations` row (migration
  * 20261022120000 §4c). `rate_usage_pct` is SMALLINT with a 0–100 CHECK,
  * `timezone` is VARCHAR(50), and `encrypted_destination_token` is the
@@ -208,7 +248,7 @@ export const DatabaseDestinationRowSchema = z
     encrypted_destination_token: z.string().nullable(),
     next_allowed_publish_at: z.string().datetime({ offset: true }).nullable(),
     rate_usage_pct: z.number().int().min(0).max(100),
-    metadata: z.record(z.unknown()),
+    metadata: DatabaseDestinationMetadataSchema,
     created_at: z.string().datetime({ offset: true }),
     updated_at: z.string().datetime({ offset: true }),
   })

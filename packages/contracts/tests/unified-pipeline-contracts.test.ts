@@ -1,7 +1,9 @@
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
+  DatabaseDestinationMetadataSchema,
   DatabaseDestinationRowSchema,
   DatabaseSocialAccountRowSchema,
+  destinationAccountTypeFromMetadata,
   DatabaseUnifiedQueueItemRowSchema,
   PUBLISH_QUEUE_MESSAGE_SCHEMA_VERSION,
   PublishOutcomeSchema,
@@ -340,6 +342,29 @@ describe('DatabaseDestinationRowSchema', () => {
     ).toEqual({ soundId: 'sound-123' });
   });
 
+  it('validates the modelled metadata keys and passes the rest through', () => {
+    // The provider-reported account type is a modelled, validated key.
+    const withType = DatabaseDestinationRowSchema.parse({
+      ...validDestinationRow,
+      metadata: { account_type: 'BUSINESS', providerAccountId: 'sa_1' },
+    });
+    expect(withType.metadata).toEqual({
+      account_type: 'BUSINESS',
+      providerAccountId: 'sa_1',
+    });
+    // A malformed account_type fails the row loudly instead of
+    // silently flowing to the story gate.
+    expect(
+      DatabaseDestinationRowSchema.safeParse({
+        ...validDestinationRow,
+        metadata: { account_type: 42 },
+      }).success
+    ).toBe(false);
+    expect(
+      DatabaseDestinationMetadataSchema.safeParse({ account_type: '' }).success
+    ).toBe(false);
+  });
+
   it('rejects out-of-range rate usage and legacy page statuses', () => {
     expect(
       DatabaseDestinationRowSchema.safeParse({ ...validDestinationRow, rate_usage_pct: 101 }).success
@@ -351,6 +376,28 @@ describe('DatabaseDestinationRowSchema', () => {
       DatabaseDestinationRowSchema.safeParse({ ...validDestinationRow, status: 'fb_rate_limited' })
         .success
     ).toBe(false);
+  });
+});
+
+describe('destinationAccountTypeFromMetadata', () => {
+  it('returns the persisted account type verbatim', () => {
+    expect(destinationAccountTypeFromMetadata({ account_type: 'BUSINESS' })).toBe(
+      'BUSINESS'
+    );
+    expect(
+      destinationAccountTypeFromMetadata({ account_type: 'MEDIA_CREATOR' })
+    ).toBe('MEDIA_CREATOR');
+  });
+
+  it('returns null for unknown or malformed metadata — never a guess', () => {
+    expect(destinationAccountTypeFromMetadata({})).toBeNull();
+    expect(
+      destinationAccountTypeFromMetadata({ providerAccountId: 'sa_1' })
+    ).toBeNull();
+    expect(destinationAccountTypeFromMetadata({ account_type: 42 })).toBeNull();
+    expect(destinationAccountTypeFromMetadata(null)).toBeNull();
+    expect(destinationAccountTypeFromMetadata(undefined)).toBeNull();
+    expect(destinationAccountTypeFromMetadata('BUSINESS')).toBeNull();
   });
 });
 

@@ -66,6 +66,17 @@ export interface InstagramProfile {
   profilePictureUrl?: string | null | undefined;
 }
 
+export interface InstagramDiscoveredDestination extends DiscoveredDestination {
+  /**
+   * The account's provider-reported type ('BUSINESS' / 'MEDIA_CREATOR'
+   * / 'CREATOR'), carried through the pending cookie so the Instagram
+   * complete route can persist it into `destinations.metadata`
+   * (`account_type`) — the datum the story gate reads (spec 132 §4.1).
+   * Null when the provider reported none; nothing is persisted then.
+   */
+  accountType: string | null;
+}
+
 async function fetchInstagramProfile(
   fetchFn: typeof fetch,
   accessToken: string
@@ -190,7 +201,7 @@ export function createInstagramConnectConfig(
     async fetchDestinations(
       accessToken: string,
       account: ExchangedAccount
-    ): Promise<DiscoveredDestination[]> {
+    ): Promise<InstagramDiscoveredDestination[]> {
       const profile = await fetchInstagramProfile(fetchFn, accessToken);
       return [
         {
@@ -198,6 +209,7 @@ export function createInstagramConnectConfig(
           name: profile.name ?? profile.username,
           handle: profile.username,
           avatarUrl: profile.profilePictureUrl ?? null,
+          accountType: profile.accountType,
         },
       ];
     },

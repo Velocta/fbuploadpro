@@ -22,6 +22,7 @@ const DESTINATION: DestinationDetail = {
   avatarUrl: null,
   timezone: 'UTC',
   status: 'active',
+  accountType: null,
   platform: 'x',
   account: { id: ACCOUNT_ID, displayName: 'Acme', platform: 'x', status: 'active' },
 };
