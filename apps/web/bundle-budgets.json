@@ -163,8 +163,8 @@
       }
     },
     "totalClientJs": {
-      "gzipBytes": 973561,
-      "rawBytes": 3131164
+      "gzipBytes": 1030329,
+      "rawBytes": 3286901
     },
     "routeCount": 25
   },
@@ -326,8 +326,8 @@
       }
     },
     "totalClientJs": {
-      "gzipBytes": 1022240,
-      "rawBytes": 3287723
+      "gzipBytes": 1081845,
+      "rawBytes": 3451246
     }
   }
 }

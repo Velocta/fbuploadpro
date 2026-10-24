@@ -83,6 +83,23 @@ const XComposer = dynamic(
   }
 );
 
+/**
+ * The YouTube composer (spec 132 G-YT) loads on demand into the same
+ * composer slot for YouTube destinations — same bundle discipline.
+ */
+const YouTubeComposer = dynamic(
+  () =>
+    import(
+      '@/components/pages/dedicated/destination-composer/youtube-composer'
+    ).then((m) => ({
+      default: m.YouTubeComposer,
+    })),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-40 w-full" />,
+  }
+);
+
 export const DESTINATION_NOT_FOUND_MESSAGE =
   "We couldn't find this destination.";
 export const DESTINATION_LOAD_ERROR_MESSAGE =
@@ -336,6 +353,10 @@ export function DestinationSlots({
         ) : destination.platform === 'x' ? (
           <div className="mt-4">
             <XComposer subdomain={subdomain} destination={destination} />
+          </div>
+        ) : destination.platform === 'youtube' ? (
+          <div className="mt-4">
+            <YouTubeComposer subdomain={subdomain} destination={destination} />
           </div>
         ) : undefined}
       </DestinationSlot>
