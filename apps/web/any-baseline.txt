@@ -24,7 +24,6 @@
 #   src/components/media/* (3 files)             133 (Media Library; filters/helpers cleared in PR-133-1)
 #   src/components/pages/dedicated/schedule-timezone-modal.tsx  134
 #   src/components/pages/dedicated/tab-insights.tsx  131
-#   src/components/ui/sidebar.tsx, tooltip.tsx   legacy ui folder — dies with the folder (129/130)
 #   src/components/workspace/workspace-lifecycle-guard.tsx  130 (shell)
 #   src/lib/api/errors.ts                        not a type: the word in a doc comment (A1a-owned file)
 #   src/lib/auth/workspaces.ts                   lib/auth (PR-A1b-owned; outside A4's file ownership)
