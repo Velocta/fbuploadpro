@@ -20,7 +20,6 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 import { Banner } from '@/components/shared/ui/banner';
-import { Button } from '@/components/shared/ui/button';
 
 export type ByocGatePlatform = 'instagram' | 'threads';
 
@@ -87,11 +86,13 @@ export function ByocGatePrompt({
           <li key={step}>{step}</li>
         ))}
       </ol>
-      <Button asChild variant="outline">
-        <Link href={settingsHref} data-testid="byoc-gate-settings-link">
-          Add app details in Settings
-        </Link>
-      </Button>
+      <Link
+        href={settingsHref}
+        data-testid="byoc-gate-settings-link"
+        className="inline-flex h-11 items-center justify-center rounded-sm border border-line bg-panel px-4 text-body font-medium text-ink shadow-card outline-none transition-colors hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold"
+      >
+        Add app details in Settings
+      </Link>
     </div>
   );
 }
