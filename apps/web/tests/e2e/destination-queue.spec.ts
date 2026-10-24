@@ -33,6 +33,7 @@ const DESTINATION = {
   handle: '@mybrand',
   avatarUrl: null,
   status: 'active',
+  accountType: null,
   connectionStatus: 'connected',
   timezone: 'UTC',
   rateUsagePct: 12,

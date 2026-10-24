@@ -66,6 +66,8 @@ export const SocialDestinationViewSchema = z.object({
   avatarUrl: z.string().nullable(),
   timezone: z.string(),
   status: z.string(),
+  /** Provider-reported account type (destinations.metadata `account_type`); null = unknown, never guessed. */
+  accountType: z.string().nullable(),
 });
 export type SocialDestinationView = z.infer<typeof SocialDestinationViewSchema>;
 

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { getSessionSecret, type DatabaseClient } from '@fbuploadpro/contracts';
+import { getSessionSecret } from '@fbuploadpro/contracts';
 import { handleConnectComplete } from '@/app/api/connect/[platform]/complete/route';
 import {
   verifyPendingDestinations,
@@ -9,9 +9,11 @@ import {
 import {
   resolveConnectDbClient,
 } from '@/lib/connect/session';
-import type { ConnectDbClient } from '@/lib/connect/persist';
+import {
+  mergeRowMetadata,
+  type ConnectDbClient,
+} from '@/lib/connect/persist';
 import type { YouTubeDiscoveredDestination } from '@/lib/connect/platforms/youtube';
-import { getRouteSupabase, isLegacyClient } from '@/lib/route-auth';
 
 /**
  * POST /api/connect/youtube/complete — finishes a YouTube connect
@@ -96,45 +98,6 @@ async function readPendingPick(
   };
 }
 
-async function mergeMetadataJson(
-  client: ConnectDbClient,
-  table: 'social_accounts' | 'destinations',
-  match: Record<string, string>,
-  providerAccountId: string
-): Promise<void> {
-  const patch = { providerAccountId };
-
-  if (isLegacyClient(client)) {
-    const legacy = client as DatabaseClient;
-    const conditions = Object.keys(match)
-      .map((column, index) => `${column} = $${index + 2}`)
-      .join(' AND ');
-    await legacy.query(
-      `UPDATE ${table} SET metadata = COALESCE(metadata, '{}'::jsonb) || $1::jsonb WHERE ${conditions}`,
-      [JSON.stringify(patch), ...Object.values(match)]
-    );
-    return;
-  }
-
-  const supabase = getRouteSupabase(client);
-  if (!supabase) return;
-  let query = supabase.from(table).select('id, metadata');
-  for (const [column, value] of Object.entries(match)) {
-    query = query.eq(column, value);
-  }
-  const { data, error } = await query;
-  if (error || !data) return;
-  for (const row of data as Array<{
-    id: string;
-    metadata: Record<string, unknown> | null;
-  }>) {
-    await supabase
-      .from(table)
-      .update({ metadata: { ...(row.metadata ?? {}), ...patch } })
-      .eq('id', row.id);
-  }
-}
-
 async function persistProviderAccountRef(
   client: ConnectDbClient,
   pick: PendingPick
@@ -142,21 +105,17 @@ async function persistProviderAccountRef(
   if (!pick.providerAccountId || pick.pickedExternalIds.length === 0) {
     return;
   }
-  await mergeMetadataJson(
-    client,
-    'social_accounts',
-    { id: pick.pending.accountId },
-    pick.providerAccountId
-  );
+  const patch = { providerAccountId: pick.providerAccountId };
+  await mergeRowMetadata(client, 'social_accounts', { id: pick.pending.accountId }, patch);
   for (const externalId of pick.pickedExternalIds) {
-    await mergeMetadataJson(
+    await mergeRowMetadata(
       client,
       'destinations',
       {
         account_id: pick.pending.accountId,
         external_destination_id: externalId,
       },
-      pick.providerAccountId
+      patch
     );
   }
 }

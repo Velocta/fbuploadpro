@@ -30,6 +30,7 @@ const DESTINATION = {
   avatarUrl: null,
   timezone: 'UTC',
   status: 'active',
+  accountType: null,
   platform: 'tiktok',
   account: {
     id: 'acct-tt-1',

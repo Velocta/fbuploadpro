@@ -252,6 +252,60 @@ describe('Persistence edge cases (legacy client)', () => {
     ).toBeNull();
   });
 
+  it('surfaces the persisted account type on the destination detail', async () => {
+    const client = makeLegacyClient((sql) => {
+      if (sql.includes('FROM destinations d')) {
+        return [
+          {
+            id: 'dest-1',
+            account_id: 'acct-1',
+            platform: 'instagram',
+            external_destination_id: '12345',
+            name: 'The Baby Boss',
+            handle: 'boss.baby',
+            avatar_url: null,
+            timezone: 'UTC',
+            status: 'active',
+            metadata: { account_type: 'BUSINESS' },
+            account_display_name: 'The Baby Boss',
+            account_status: 'active',
+          },
+        ];
+      }
+      return [];
+    });
+    const detail = await fetchDestinationDetail(client, workspaceId, 'dest-1');
+    expect(detail?.accountType).toBe('BUSINESS');
+    expect(detail?.platform).toBe('instagram');
+  });
+
+  it('reports accountType null when the destination metadata carries none', async () => {
+    const client = makeLegacyClient((sql) => {
+      if (sql.includes('FROM destinations d')) {
+        return [
+          {
+            id: 'dest-1',
+            account_id: 'acct-1',
+            platform: 'instagram',
+            external_destination_id: '12345',
+            name: 'The Baby Boss',
+            handle: 'boss.baby',
+            avatar_url: null,
+            timezone: 'UTC',
+            status: 'active',
+            metadata: {},
+            account_display_name: 'The Baby Boss',
+            account_status: 'active',
+          },
+        ];
+      }
+      return [];
+    });
+    const detail = await fetchDestinationDetail(client, workspaceId, 'dest-1');
+    // Connected before the type was persisted: unknown, never guessed.
+    expect(detail?.accountType).toBeNull();
+  });
+
   it('decrypts stored credentials for the exchange', async () => {
     const encrypted = await encryptToken('the-secret', TEST_ENCRYPTION_KEY);
     const client = makeLegacyClient((sql) => {

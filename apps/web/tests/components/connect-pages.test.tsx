@@ -129,6 +129,7 @@ describe('Destination dedicated-section landing page', () => {
           avatarUrl: null,
           timezone: 'UTC',
           status: 'active',
+          accountType: null,
           platform: 'instagram',
           account: {
             id: 'acct-1',
@@ -181,6 +182,7 @@ describe('Destination frame slots (spec 128 §9.4 wiring)', () => {
           avatarUrl: null,
           timezone: 'UTC',
           status: 'active',
+          accountType: null,
           platform: 'instagram',
           account: {
             id: 'acct-1',

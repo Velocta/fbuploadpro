@@ -22,18 +22,23 @@ const InstagramComposer = dynamic(
 /**
  * Frame mount for the Instagram composer set (spec 132 PR-C3): the
  * 131-4 destination frame renders this in its composer slot for
- * Instagram destinations. Account type is not surfaced on the
- * destination read today, so it is not passed — Stories stay
- * unoffered (the §4.1 fallback) until it is.
+ * Instagram destinations. The frame passes the destination's
+ * persisted account type (surfaced on the destination detail from
+ * `destinations.metadata`), so a known-Business destination is
+ * offered Stories; Creator and unknown destinations are not
+ * (the §4.1 gate).
  */
 export interface InstagramComposerSlotProps {
   subdomain: string;
   destination: InstagramComposerDestination;
+  /** The destination's Instagram account type, when known. */
+  accountType?: string | null | undefined;
 }
 
 export function InstagramComposerSlot({
   subdomain,
   destination,
+  accountType,
 }: Readonly<InstagramComposerSlotProps>) {
   return (
     <DestinationComposerSlotShell
@@ -43,6 +48,7 @@ export function InstagramComposerSlot({
         <InstagramComposer
           subdomain={subdomain}
           destination={destination}
+          accountType={accountType}
           onClose={onClose}
           onSubmitted={onSubmitted}
         />

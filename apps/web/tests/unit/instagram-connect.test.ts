@@ -17,6 +17,7 @@ import {
   createInstagramConnectConfig,
   isProfessionalInstagramAccountType,
   registerInstagramConnectConfig,
+  type InstagramDiscoveredDestination,
 } from '@/lib/connect/platforms/instagram';
 
 describe('Instagram connect registration (spec 124)', () => {
@@ -136,6 +137,9 @@ describe('Instagram connect exchange (spec 124)', () => {
         name: 'The Baby Boss',
         handle: 'boss.baby',
         avatarUrl: 'https://img.example/avatar.jpg',
+        // The provider-reported type rides the discovered destination
+        // so the complete route can persist it (spec 132 G-IG.1(iii)).
+        accountType: 'BUSINESS',
       },
     ]);
   });
@@ -153,5 +157,14 @@ describe('Instagram connect exchange (spec 124)', () => {
     const config = createInstagramConnectConfig(fetchFn);
     const account = await config.exchangeCode('ig-auth-code', ctx);
     expect(account.externalAccountId).toBe('12345');
+
+    // The Creator type is carried verbatim too — persisting it is
+    // what keeps Stories unoffered for this destination (never a
+    // guess in either direction).
+    const destinations = (await config.fetchDestinations(
+      account.accessToken,
+      account
+    )) as InstagramDiscoveredDestination[];
+    expect(destinations[0]?.accountType).toBe('MEDIA_CREATOR');
   });
 });

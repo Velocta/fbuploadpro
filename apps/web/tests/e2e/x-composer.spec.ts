@@ -31,6 +31,7 @@ const DESTINATION = {
   avatarUrl: null,
   timezone: 'UTC',
   status: 'active',
+  accountType: null,
   platform: 'x',
   account: {
     id: '22222222-2222-4222-8222-222222222222',

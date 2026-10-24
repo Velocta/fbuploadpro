@@ -102,12 +102,14 @@ describe('accounts schemas', () => {
               avatarUrl: null,
               timezone: 'UTC',
               status: 'active',
+              accountType: 'BUSINESS',
             },
           ],
         },
       ],
     });
     expect(social.accounts[0]?.platform).toBe('instagram');
+    expect(social.accounts[0]?.destinations[0]?.accountType).toBe('BUSINESS');
     expect(
       MagicLinkResponseSchema.parse({
         success: true,
@@ -431,6 +433,7 @@ describe('settings, workspaces and connect schemas', () => {
         avatarUrl: null,
         timezone: 'UTC',
         status: 'active',
+        accountType: null,
         platform: 'facebook',
         account: { id: UUID2, displayName: 'Jane', platform: 'facebook', status: 'active' },
       },

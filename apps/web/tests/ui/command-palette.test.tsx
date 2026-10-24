@@ -106,6 +106,7 @@ const SOCIAL = {
           avatarUrl: null,
           timezone: 'UTC',
           status: 'active',
+          accountType: null,
         },
       ],
     },

@@ -36,6 +36,9 @@ const DESTINATION = {
   avatarUrl: null,
   timezone: 'UTC',
   status: 'active',
+  // No persisted account type: this destination stands in for one
+  // connected before the type was recorded (unknown — never guessed).
+  accountType: null,
   platform: 'instagram',
   account: {
     id: 'acct-1',
@@ -64,14 +67,15 @@ async function expectNoHorizontalOverflow(page: Page) {
 async function openDestination(
   page: Page,
   state: FixtureState,
-  slots: Array<Record<string, unknown>>
+  slots: Array<Record<string, unknown>>,
+  destination: Record<string, unknown> = DESTINATION
 ) {
   await installApiFixtures(page, state);
   await page.route(`**/api/tenant/${SUB}/accounts/social/${DESTINATION_ID}`, (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ destination: DESTINATION }),
+      body: JSON.stringify({ destination }),
     })
   );
   await page.route(
@@ -124,7 +128,8 @@ test.describe('destination composer — Instagram (spec 132 PR-C3)', () => {
     await page.getByTestId('instagram-composer-open-btn').click();
     await expect(page.getByTestId('instagram-composer')).toBeVisible();
 
-    // Stories are not offered (account type is not surfaced by the frame).
+    // Stories are not offered: this destination's account type is
+    // unknown (never persisted), and the §4.1 gate fails closed.
     await expect(
       page.getByTestId('instagram-composer-format-story')
     ).toHaveCount(0);
@@ -142,6 +147,24 @@ test.describe('destination composer — Instagram (spec 132 PR-C3)', () => {
     await expect(page.getByText('Posted to My Brand.')).toBeVisible();
     expect(state.queue).toHaveLength(1);
     expect(state.queue[0]).toMatchObject({ caption: 'e2e sunset' });
+  });
+
+  test('offers Stories to a known-Business destination', async ({ page }) => {
+    const state = seededState();
+    await openDestination(page, state, [], {
+      ...DESTINATION,
+      accountType: 'BUSINESS',
+    });
+    await page.setViewportSize({ width: 1024, height: 900 });
+
+    await page.getByTestId('instagram-composer-open-btn').click();
+    await expect(page.getByTestId('instagram-composer')).toBeVisible();
+
+    // The persisted account type flows frame → slot → composer, and
+    // the §4.1 gate opens for Business.
+    await expect(
+      page.getByTestId('instagram-composer-format-story')
+    ).toBeVisible();
   });
 
   test('queues a photo at the covering posting slot', async ({ page }) => {
@@ -238,6 +261,7 @@ const THREADS_DESTINATION = {
   avatarUrl: null,
   timezone: 'UTC',
   status: 'active',
+  accountType: null,
   platform: 'threads',
   account: {
     id: 'acct-2',
