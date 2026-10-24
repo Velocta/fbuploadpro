@@ -43,16 +43,9 @@ arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[left,r
 arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[margin,opacity]
 arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[width,height,padding]
 hex apps/web/src/components/connect/byoc-gate.tsx 2
-hex apps/web/src/components/pages/dedicated/tab-settings.tsx 1
 hex apps/web/src/components/ui/checkbox.tsx 4
 hex apps/web/src/components/ui/switch.tsx 3
-rgb apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx 5
 rgb apps/web/src/components/pages/dedicated/modal-styles.ts 1
-rgb apps/web/src/components/pages/dedicated/page-header.tsx 3
-rgb apps/web/src/components/pages/dedicated/schedule-timezone-modal.tsx 5
-rgb apps/web/src/components/pages/dedicated/tab-dashboard.tsx 1
-rgb apps/web/src/components/pages/dedicated/tab-insights.tsx 2
-rgb apps/web/src/components/pages/dedicated/tab-settings.tsx 6
 rgb apps/web/src/components/ui/alert.tsx 3
 rgb apps/web/src/components/ui/button.tsx 1
 rgb apps/web/src/components/ui/checkbox.tsx 1
@@ -64,7 +57,6 @@ rgb apps/web/src/components/ui/tag.tsx 10
 rgb apps/web/src/components/ui/textarea.tsx 1
 rgb apps/web/src/lib/component-styles.ts 1
 zindex apps/web/src/components/pages/dedicated/modal-styles.ts 1
-zindex apps/web/src/components/pages/dedicated/page-header.tsx 1
 zindex apps/web/src/components/ui/dialog.tsx 2
 zindex apps/web/src/components/ui/input.tsx 1
 important apps/web/src/components/ui/button.tsx 7

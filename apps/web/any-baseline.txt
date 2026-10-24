@@ -31,9 +31,6 @@
 #   src/lib/connect/persist.ts                   connect framework (spec 123; consumed as-is per spec §5)
 #
 # Format: <file> <count>
-apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx 8
-apps/web/src/components/pages/dedicated/schedule-timezone-modal.tsx 1
-apps/web/src/components/pages/dedicated/tab-insights.tsx 1
 apps/web/src/lib/api/errors.ts 1
 apps/web/src/lib/auth/workspaces.ts 5
 apps/web/src/lib/connect/persist.ts 8
