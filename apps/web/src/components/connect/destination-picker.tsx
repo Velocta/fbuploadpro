@@ -2,8 +2,10 @@
 
 /**
  * Destination picker (Spec 123, Part C) — rebuilt on the design
- * system (spec 131 PR-131-4): shared/ui Checkbox + Button, token-backed
- * utilities only, avatar via next/image.
+ * system (spec 131 PR-131-4): token-backed utilities only, avatar via
+ * next/image. Native checkbox/button controls (as in the original)
+ * keep this route inside its enforced bundle budget (spec 139 D137-3);
+ * the controls carry the token styling + 44px targets directly.
  *
  * Reuses the spec 109 Pages-discovery behaviour from add-page-modal:
  * destinations that share a name are never merged — each row is
@@ -23,8 +25,6 @@ import {
   type DiscoveredDestination,
   type Platform,
 } from '@/lib/connect/registry';
-import { Button } from '@/components/shared/ui/button';
-import { Checkbox } from '@/components/shared/ui/checkbox';
 
 export type DestinationPickResult =
   | { ok: true; accountsUrl: string }
@@ -89,11 +89,13 @@ function DestinationRow({
   const content = (
     <>
       {!isSingleConfirm && (
-        <Checkbox
+        <input
+          type="checkbox"
           data-testid={`destination-checkbox-${destination.externalDestinationId}`}
           checked={isChecked}
-          onCheckedChange={() => onToggle(destination.externalDestinationId)}
+          onChange={() => onToggle(destination.externalDestinationId)}
           aria-label={destination.name}
+          className="size-4 shrink-0 cursor-pointer accent-primary"
         />
       )}
       <DestinationAvatar
@@ -274,12 +276,13 @@ export function DestinationPicker({
       )}
 
       <div className="mt-6 flex justify-end">
-        <Button
+        <button
           type="button"
           data-testid="destination-picker-confirm-btn"
-          disabled={selectedIds.length === 0}
-          loading={isSaving}
+          disabled={selectedIds.length === 0 || isSaving}
+          aria-busy={isSaving || undefined}
           onClick={() => void handleConfirm()}
+          className="inline-flex h-11 items-center justify-center rounded-sm bg-primary px-6 text-body font-semibold text-on-primary transition-colors outline-none hover:bg-brand-peru focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold disabled:pointer-events-none disabled:opacity-50"
         >
           {confirmButtonLabel(
             isSaving,
@@ -287,7 +290,7 @@ export function DestinationPicker({
             platformName,
             selectedIds.length
           )}
-        </Button>
+        </button>
       </div>
     </div>
   );
