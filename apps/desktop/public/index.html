@@ -4,196 +4,113 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FBUploadPro</title>
+  <!-- Offline fallback page (spec 145 §5.4). This is a native-shell asset,
+       NOT a web-app surface: plain system styling, no design-system tokens,
+       no web-app assets. It works with zero web-app assets available. -->
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background-color: #000000;
-      color: #ffffff;
+      background-color: #000000; color: #ffffff;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      -webkit-font-smoothing: antialiased;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      overflow: hidden;
-      user-select: none;
+      display: flex; flex-direction: column; height: 100vh; overflow: hidden; user-select: none;
     }
     .titlebar {
-      height: 36px;
-      background-color: #000000;
-      border-bottom: 1px solid #1f242d;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 0 0 12px;
+      height: 36px; background-color: #000000; border-bottom: 1px solid #1f242d;
+      display: flex; align-items: center; justify-content: space-between; padding: 0 0 0 12px;
       -webkit-app-region: drag;
     }
-    .titlebar-brand {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      font-weight: 500;
-      color: #d1d5db;
-      letter-spacing: 0.02em;
-    }
-    .titlebar-monogram {
-      width: 16px;
-      height: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-    .titlebar-controls {
-      display: flex;
-      align-items: center;
-      -webkit-app-region: no-drag;
-      height: 100%;
-    }
+    .titlebar-brand { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; color: #d1d5db; }
+    .titlebar-controls { display: flex; align-items: center; -webkit-app-region: no-drag; height: 100%; }
     .window-btn {
-      background: none;
-      border: none;
-      color: #d1d5db;
-      width: 42px;
-      height: 36px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      font-size: 13px;
-      transition: background-color 0.15s ease, color 0.15s ease;
+      background: none; border: none; color: #d1d5db; width: 42px; height: 36px;
+      display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px;
     }
-    .window-btn:hover {
-      background-color: #1f242d;
-      color: #ffffff;
-    }
-    .window-btn.close:hover {
-      background-color: #d92d20;
-      color: #ffffff;
-    }
-    .content {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-    }
+    .window-btn:hover { background-color: #1f242d; color: #ffffff; }
+    .window-btn.close:hover { background-color: #d92d20; color: #ffffff; }
+    .content { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
     .card {
-      background-color: #0c0d10;
-      border: 1px solid #1f242d;
-      border-radius: 8px;
-      padding: 32px;
-      max-width: 440px;
-      width: 100%;
-      text-align: center;
-      box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.85);
+      background-color: #0c0d10; border: 1px solid #1f242d; border-radius: 8px;
+      padding: 32px; max-width: 440px; width: 100%; text-align: center;
     }
-    .status-icon {
-      width: 44px;
-      height: 44px;
-      margin: 0 auto 16px;
-      background-color: #1f242d;
-      border: 1px solid #766018;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #fad734;
+    h1 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+    p { font-size: 14px; color: #d1d5db; line-height: 1.5; margin-bottom: 12px; }
+    .host { font-size: 13px; color: #9ca3af; margin-bottom: 24px; word-break: break-all; }
+    .status { font-size: 13px; color: #fad734; min-height: 20px; margin-bottom: 12px; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 14px; padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; width: 100%;
     }
-    h1 {
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 8px;
-      color: #ffffff;
-      letter-spacing: -0.015em;
-    }
-    p {
-      font-size: 14px;
-      color: #d1d5db;
-      line-height: 1.5;
-      margin-bottom: 24px;
-    }
-    .btn-retry {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      background-color: #fad734;
-      color: #000000;
-      font-weight: 700;
-      font-size: 14px;
-      padding: 10px 20px;
-      border-radius: 6px;
-      border: none;
-      cursor: pointer;
-      transition: opacity 0.15s ease;
-      width: 100%;
-    }
-    .btn-retry:hover {
-      opacity: 0.9;
-    }
+    .btn-retry { background-color: #fad734; color: #000000; font-weight: 700; margin-bottom: 8px; }
+    .btn-retry:disabled { opacity: 0.5; cursor: default; }
+    .btn-browser { background: none; color: #d1d5db; border: 1px solid #1f242d; }
+    .btn-browser:hover { color: #ffffff; }
   </style>
 </head>
 <body>
   <header class="titlebar" data-tauri-drag-region>
-    <div class="titlebar-brand" data-tauri-drag-region>
-      <div class="titlebar-monogram">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="16" height="16" fill="none" role="img" aria-label="FBUploadPro">
-          <path d="M24 11L12 23L17 28L20 25V51L28 45V23H45L53 15H28L24 11Z" fill="#fad734"/>
-          <path d="M24 11L12 23L13.2 24.2L24 13.4L28 17.4H50.6L53 15H28L24 11Z" fill="#ffffff" fill-opacity="0.35"/>
-          <path d="M32 30H48L40 38H32V30Z" fill="#b29527"/>
-          <path d="M32 43H41L35 49H32V43Z" fill="#766018"/>
-        </svg>
-      </div>
-      <span>FBUploadPro</span>
-    </div>
+    <div class="titlebar-brand" data-tauri-drag-region><span>FBUploadPro</span></div>
     <div class="titlebar-controls" data-tauri-drag-region="false">
-      <button type="button" class="window-btn" id="btn-minimize" aria-label="Minimize window">
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><rect y="4.5" width="10" height="1"></rect></svg>
-      </button>
-      <button type="button" class="window-btn" id="btn-maximize" aria-label="Maximize or restore window">
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1"><rect x="1.5" y="1.5" width="7" height="7"></rect></svg>
-      </button>
-      <button type="button" class="window-btn close" id="btn-close" aria-label="Close window">
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7"></path></svg>
-      </button>
+      <button type="button" class="window-btn" id="btn-minimize" aria-label="Minimize window">–</button>
+      <button type="button" class="window-btn" id="btn-maximize" aria-label="Maximize or restore window">▢</button>
+      <button type="button" class="window-btn close" id="btn-close" aria-label="Close window">✕</button>
     </div>
   </header>
-
   <main class="content">
     <div class="card">
-      <div class="status-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="12" y1="8" x2="12" y2="12"></line>
-          <line x1="12" y1="16" x2="12.01" y2="16"></line>
-        </svg>
-      </div>
-      <h1>Unable to Connect</h1>
-      <p>We could not establish a connection to the FBUploadPro workspace. Please verify your network connection and try again.</p>
-      <button type="button" class="btn-retry" id="btn-retry">Retry Connection</button>
+      <h1>You're offline</h1>
+      <p>FBUploadPro couldn't be reached. Check your connection, then try again — your workspace will load as soon as it's reachable.</p>
+      <div class="host" id="attempted-host"></div>
+      <div class="status" id="status"></div>
+      <button type="button" class="btn btn-retry" id="btn-retry">Retry</button>
+      <button type="button" class="btn btn-browser" id="btn-browser">Open in browser</button>
     </div>
   </main>
-
   <script>
+    async function invoke(command, args) {
+      if (window.__TAURI_INTERNALS__?.invoke) return window.__TAURI_INTERNALS__.invoke(command, args);
+      if (window.__TAURI__?.core?.invoke) return window.__TAURI__.core.invoke(command, args);
+      throw new Error('Tauri invoke unavailable');
+    }
     async function invokeAction(action) {
-      try {
-        if (window.__TAURI_INTERNALS__?.invoke) {
-          await window.__TAURI_INTERNALS__.invoke('handle_window_action', { action });
-        } else if (window.__TAURI__?.core?.invoke) {
-          await window.__TAURI__.core.invoke('handle_window_action', { action });
-        }
-      } catch (err) {
-        console.warn('Action failed', err);
-      }
+      try { await invoke('handle_window_action', { action }); } catch (err) { console.warn('Action failed', err); }
     }
     document.getElementById('btn-minimize').addEventListener('click', () => invokeAction('minimize'));
     document.getElementById('btn-maximize').addEventListener('click', () => invokeAction('toggle_maximize'));
     document.getElementById('btn-close').addEventListener('click', () => invokeAction('close'));
-    document.getElementById('btn-retry').addEventListener('click', () => window.location.reload());
+
+    let startUrl = null;
+    let attempts = 0;
+    // Show only the attempted host, never the full URL or any query string.
+    invoke('shell_get_start_url', { payload: {} }).then((res) => {
+      startUrl = res.url;
+      try { document.getElementById('attempted-host').textContent = 'Tried to reach: ' + new URL(res.url).host; }
+      catch { document.getElementById('attempted-host').textContent = ''; }
+    }).catch(() => {});
+    document.getElementById('btn-browser').addEventListener('click', async () => {
+      if (!startUrl) return;
+      try { await invoke('open_external_url', { url: startUrl }); } catch (err) { console.warn('Open failed', err); }
+    });
+    // Retry is user-initiated, one attempt per click — no auto-retry loop.
+    document.getElementById('btn-retry').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      attempts += 1;
+      const status = document.getElementById('status');
+      status.textContent = 'Checking connection…';
+      try {
+        const res = await invoke('shell_retry_connection', { payload: {} });
+        if (res.reachable) {
+          status.textContent = 'Connected — loading your workspace…';
+          // The shell navigates the main window on success (§7.3).
+        } else {
+          status.textContent = 'Still unreachable (attempt ' + attempts + '). Try again in a moment.';
+          btn.disabled = false;
+        }
+      } catch (err) {
+        status.textContent = 'Still unreachable (attempt ' + attempts + '). Try again in a moment.';
+        btn.disabled = false;
+      }
+    });
   </script>
 </body>
 </html>
