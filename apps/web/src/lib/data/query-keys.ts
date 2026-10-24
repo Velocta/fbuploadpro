@@ -39,6 +39,12 @@ export const queryKeys = {
         all: [...tenantRoot, 'destinations'] as const,
         detail: (destinationId: string) =>
           [...tenantRoot, 'destinations', destinationId] as const,
+        /** Unified queue list for one destination (spec 134 PR-134-3). */
+        queue: (destinationId: string) =>
+          [...tenantRoot, 'destinations', destinationId, 'queue'] as const,
+        /** Unified posting slots for one destination (spec 134 PR-134-3). */
+        slots: (destinationId: string) =>
+          [...tenantRoot, 'destinations', destinationId, 'posting-slots'] as const,
       },
 
       queue: {

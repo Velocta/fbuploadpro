@@ -51,6 +51,20 @@ describe('queryKeys factory (spec 137 §3.2.3)', () => {
       'destinations',
       'dest-1',
     ]);
+    expect(tenant.destinations.queue('dest-1')).toEqual([
+      'tenant',
+      'acme',
+      'destinations',
+      'dest-1',
+      'queue',
+    ]);
+    expect(tenant.destinations.slots('dest-1')).toEqual([
+      'tenant',
+      'acme',
+      'destinations',
+      'dest-1',
+      'posting-slots',
+    ]);
     expect(tenant.media.detail('media-1')).toEqual(['tenant', 'acme', 'media', 'media-1']);
     expect(tenant.media.folders).toEqual(['tenant', 'acme', 'media', 'folders']);
     expect(tenant.settings.platformCredentials('instagram')).toEqual([
