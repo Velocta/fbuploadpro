@@ -304,8 +304,10 @@ jobs:
     # against), built by the rig's own db/run-migrations.ts (bootstrap
     # + every supabase/migrations file in filename order), and is then
     # run through the rig's existing env-var config surface, unchanged:
-    #   - spec 117 RLS rig (apps/worker/tests/rls-rpc): 44 assertions,
-    #     RLS_RPC_PG_URL, hardened mode (the default).
+    #   - spec 117 RLS rig (apps/worker/tests/rls-rpc): 40 assertions
+    #     in hardened mode since Phase 7 (the legacy-RPC probes and
+    #     BYOC section became the post-drop absence proof +
+    #     platform_credentials section), RLS_RPC_PG_URL.
     #   - spec 139 db-hygiene rig (apps/worker/tests/db-hygiene):
     #     58 assertions, DB_HYGIENE_PG_URL, hardened mode — recovery
     #     index + trigger EXECUTE revokes (20261023193000) and the
@@ -380,7 +382,7 @@ jobs:
           RLS_RPC_PG_URL: postgres://postgres:postgres@localhost:5432/rls117
         run: pnpm --filter @fbuploadpro/worker exec tsx tests/rls-rpc/db/run-migrations.ts
 
-      - name: Spec 117 RLS rig — 44 assertions (hardened mode)
+      - name: Spec 117 RLS rig — 40 assertions (hardened mode, post-Phase-7)
         env:
           RLS_RPC_PG_URL: postgres://postgres:postgres@localhost:5432/rls117
         run: pnpm --filter @fbuploadpro/worker exec tsx tests/rls-rpc/check.ts

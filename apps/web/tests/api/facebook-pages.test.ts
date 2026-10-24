@@ -58,7 +58,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
-          if (sql.includes('FROM facebook_accounts')) {
+          if (sql.includes('FROM social_accounts')) {
             return Promise.resolve([
               {
                 id: accountId,
@@ -70,7 +70,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
               },
             ]);
           }
-          if (sql.includes('FROM facebook_pages')) {
+          if (sql.includes('FROM destinations')) {
             // Query must exclude status != 'disconnected' so page_disconnected is not returned here
             return Promise.resolve([{ fbPageId: 'page_1001' }]);
           }
@@ -132,7 +132,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       const res = await handleDiscoverPages(req, 'acme', accountId, mockDb);
       expect(res.status).toBe(200);
 
-      const pagesSql = executedQueries.find((q) => q.includes('FROM facebook_pages'));
+      const pagesSql = executedQueries.find((q) => q.includes('FROM destinations'));
       expect(pagesSql).toBeDefined();
       expect(pagesSql).toContain("status != 'disconnected'");
 
@@ -173,7 +173,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
-          if (sql.includes('FROM facebook_accounts')) {
+          if (sql.includes('FROM social_accounts')) {
             return Promise.resolve([
               {
                 id: accountId,
@@ -184,14 +184,14 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
               },
             ]);
           }
-          if (sql.includes('INSERT INTO facebook_pages')) {
+          if (sql.includes('INSERT INTO destinations')) {
             executedInsertSqls.push(sql);
             savedPages.push(params);
             return Promise.resolve([
               {
                 id: pageId,
-                fbPageId: params[3],
-                pageName: params[4],
+                fbPageId: params[2],
+                pageName: params[3],
               },
             ]);
           }
@@ -247,40 +247,45 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
 
       expect(executedInsertSqls).toHaveLength(1);
       const insertSql = executedInsertSqls[0]!;
-      expect(insertSql).toContain('starting_followers, current_followers');
-      expect(insertSql).toContain('VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10)');
-      expect(insertSql).toContain('current_followers = EXCLUDED.current_followers');
-      expect(insertSql).toContain(
-        "WHEN facebook_pages.status = 'disconnected' THEN EXCLUDED.starting_followers"
-      );
-      expect(insertSql).toContain('ELSE facebook_pages.starting_followers');
+      // Unified destinations upsert: follower baselines live in the
+      // metadata jsonb; the merge preserves starting_followers unless
+      // the existing destination was disconnected.
+      expect(insertSql).toContain('INSERT INTO destinations');
+      expect(insertSql).toContain('ON CONFLICT (account_id, external_destination_id)');
+      expect(insertSql).toContain("'starting_followers'");
+      expect(insertSql).toContain("'current_followers'");
+      expect(insertSql).toContain("destinations.status = 'disconnected'");
 
       expect(savedPages).toHaveLength(1);
       const [
-        uId,
         wsId,
         accId,
         fbPageId,
         pageName,
-        category,
-        _tasksJson,
-        followers,
-        encryptedToken,
         profilePictureUrl,
+        encryptedToken,
+        category,
+        tasksJson,
+        followers,
       ] = savedPages[0];
 
-      expect(uId).toBe(userId);
       expect(wsId).toBe('ws_123');
       expect(accId).toBe(accountId);
       expect(fbPageId).toBe('page_1002');
       expect(pageName).toBe('Creator Vlog Page');
-      expect(category).toBe('Digital Creator');
-      expect(followers).toBe(14000);
-      expect(encryptedToken).toBeTypeOf('string');
-      expect(encryptedToken).toContain(':');
       expect(profilePictureUrl).toBe(
         'https://platform-lookaside.fbsbx.com/platform/profilepic/page_1002.jpg'
       );
+      expect(encryptedToken).toBeTypeOf('string');
+      expect(encryptedToken).toContain(':');
+      // The metadata jsonb is built in SQL from these params:
+      // category, tasks, and followers feeding BOTH the starting and
+      // current follower fields of jsonb_build_object.
+      expect(category).toBe('Digital Creator');
+      expect(JSON.parse(tasksJson as string)).toEqual(['CREATE_CONTENT']);
+      expect(followers).toBe(14000);
+      expect(insertSql).toContain("'starting_followers', $9::int");
+      expect(insertSql).toContain("'current_followers', $9::int");
 
       // Verify page token decodes back to original
       const decrypted = await decryptToken(encryptedToken, TEST_ENCRYPTION_KEY);
@@ -321,7 +326,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
               }),
             };
           }
-          if (table === 'facebook_accounts') {
+          if (table === 'social_accounts') {
             return {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
@@ -334,18 +339,18 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
               }),
             };
           }
-          if (table === 'facebook_pages') {
+          if (table === 'destinations') {
             return {
               select: vi.fn((fields: string) => {
-                if (fields.includes('starting_followers')) {
+                if (fields.includes('metadata')) {
                   return {
                     eq: vi.fn().mockReturnThis(),
                     in: vi.fn().mockResolvedValue({
                       data: [
                         {
-                          fb_page_id: 'page_active_1',
+                          external_destination_id: 'page_active_1',
                           status: 'active',
-                          starting_followers: 10000,
+                          metadata: { starting_followers: 10000 },
                         },
                       ],
                       error: null,
@@ -364,8 +369,8 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
                     single: vi.fn().mockResolvedValue({
                       data: {
                         id: pageId,
-                        fb_page_id: 'page_active_1',
-                        page_name: 'Active Page',
+                        external_destination_id: 'page_active_1',
+                        name: 'Active Page',
                       },
                       error: null,
                     }),
@@ -397,8 +402,8 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       expect(res.status).toBe(200);
 
       expect(upsertedPayload).toBeDefined();
-      expect(upsertedPayload.starting_followers).toBe(10000);
-      expect(upsertedPayload.current_followers).toBe(25000);
+      expect(upsertedPayload.metadata.starting_followers).toBe(10000);
+      expect(upsertedPayload.metadata.current_followers).toBe(25000);
       expect(upsertedPayload.status).toBe('active');
     });
 
@@ -436,7 +441,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
               }),
             };
           }
-          if (table === 'facebook_accounts') {
+          if (table === 'social_accounts') {
             return {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
@@ -449,18 +454,18 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
               }),
             };
           }
-          if (table === 'facebook_pages') {
+          if (table === 'destinations') {
             return {
               select: vi.fn((fields: string) => {
-                if (fields.includes('starting_followers')) {
+                if (fields.includes('metadata')) {
                   return {
                     eq: vi.fn().mockReturnThis(),
                     in: vi.fn().mockResolvedValue({
                       data: [
                         {
-                          fb_page_id: 'page_disc_1',
+                          external_destination_id: 'page_disc_1',
                           status: 'disconnected',
-                          starting_followers: 5000,
+                          metadata: { starting_followers: 5000 },
                         },
                       ],
                       error: null,
@@ -479,8 +484,8 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
                     single: vi.fn().mockResolvedValue({
                       data: {
                         id: pageId,
-                        fb_page_id: 'page_disc_1',
-                        page_name: 'Disconnected Page',
+                        external_destination_id: 'page_disc_1',
+                        name: 'Disconnected Page',
                       },
                       error: null,
                     }),
@@ -512,8 +517,8 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       expect(res.status).toBe(200);
 
       expect(upsertedPayload).toBeDefined();
-      expect(upsertedPayload.starting_followers).toBe(30000);
-      expect(upsertedPayload.current_followers).toBe(30000);
+      expect(upsertedPayload.metadata.starting_followers).toBe(30000);
+      expect(upsertedPayload.metadata.current_followers).toBe(30000);
       expect(upsertedPayload.status).toBe('active');
     });
   });
@@ -585,9 +590,9 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       const res = await handleListPages(req, 'acme', mockDb);
       expect(res.status).toBe(200);
 
-      expect(capturedSql).toContain("p.status != 'disconnected'");
-      expect(capturedSql).toContain('p.starting_followers');
-      expect(capturedSql).toContain('p.current_followers');
+      expect(capturedSql).toContain("d.status != 'disconnected'");
+      expect(capturedSql).toContain('starting_followers');
+      expect(capturedSql).toContain('current_followers');
 
       const json = await res.json();
       expect(json.total).toBe(3);
@@ -628,11 +633,11 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
-          if (sql.includes('UPDATE facebook_pages') && sql.includes("status = 'active'")) {
+          if (sql.includes('UPDATE destinations') && sql.includes("status = 'active'")) {
             updateExecuted = true;
             return Promise.resolve([]);
           }
-          if (sql.includes('FROM facebook_pages')) {
+          if (sql.includes('FROM destinations')) {
             return Promise.resolve([
               {
                 id: pageId,
@@ -683,7 +688,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
               }),
             };
           }
-          if (table === 'facebook_pages') {
+          if (table === 'destinations') {
             const pageQuery: any = {
               eq: vi.fn().mockImplementation(() => pageQuery),
               neq: vi.fn().mockImplementation(() => pageQuery),
@@ -691,13 +696,21 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
                 data: [
                   {
                     id: pageId,
-                    facebook_account_id: accountId,
-                    fb_page_id: 'page_rate_limited_sb',
-                    page_name: 'Supabase Cooldown Page',
-                    status: 'fb_rate_limited',
+                    account_id: accountId,
+                    external_destination_id: 'page_rate_limited_sb',
+                    name: 'Supabase Cooldown Page',
+                    avatar_url: null,
+                    status: 'rate_limited',
+                    metadata: {
+                      category: 'Retail Company',
+                      tasks: ['CREATE_CONTENT'],
+                      starting_followers: 1000,
+                      current_followers: 1050,
+                      rate_limited_at: pastDate,
+                    },
                     updated_at: pastDate,
                     created_at: pastDate,
-                    facebook_accounts: { display_name: 'Alex Supabase' },
+                    social_accounts: { display_name: 'Alex Supabase' },
                   },
                 ],
                 error: null,
@@ -746,10 +759,10 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
             return Promise.resolve([{ id: 'ws_123' }]);
           }
           executedStatements.push({ sql, params });
-          if (sql.includes('UPDATE facebook_pages')) {
-            return Promise.resolve([{ id: pageId, fb_page_id: 'page_1001' }]);
+          if (sql.includes('UPDATE destinations')) {
+            return Promise.resolve([{ id: pageId, fbPageId: 'page_1001' }]);
           }
-          if (sql.includes('UPDATE legacy_queue_items')) {
+          if (sql.includes('UPDATE queue_items')) {
             return Promise.resolve([]);
           }
           return Promise.resolve([]);
@@ -772,13 +785,13 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       expect(json.pageId).toBe(pageId);
 
       expect(executedStatements).toHaveLength(2);
-      expect(executedStatements[0]!.sql).toContain("SET status = 'disconnected'");
-      expect(executedStatements[0]!.sql).toContain("encrypted_access_token = ''");
-      expect(executedStatements[0]!.params).toEqual([pageId, userId, 'ws_123']);
+      expect(executedStatements[0]!.sql).toContain("status = 'disconnected'");
+      expect(executedStatements[0]!.sql).toContain('encrypted_destination_token = NULL');
+      expect(executedStatements[0]!.params).toEqual([pageId, 'ws_123']);
 
-      expect(executedStatements[1]!.sql).toContain('UPDATE legacy_queue_items');
-      expect(executedStatements[1]!.sql).toContain("SET status = 'skipped'");
-      expect(executedStatements[1]!.params).toEqual([userId, pageId]);
+      expect(executedStatements[1]!.sql).toContain('UPDATE queue_items');
+      expect(executedStatements[1]!.sql).toContain("status = 'cancelled'");
+      expect(executedStatements[1]!.params).toEqual(['ws_123', pageId]);
     });
 
     it('disconnects page and skips queued items via Supabase client', async () => {
@@ -798,10 +811,16 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
               }),
             };
           }
-          if (table === 'facebook_pages') {
+          if (table === 'destinations') {
             return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnThis(),
+                maybeSingle: vi
+                  .fn()
+                  .mockResolvedValue({ data: { metadata: {} }, error: null }),
+              }),
               update: vi.fn((payload: any) => {
-                if (payload.status === 'disconnected') {
+                if (payload.status === 'disconnected' && payload.encrypted_destination_token === null) {
                   pageDisconnected = true;
                 }
                 return {
@@ -809,7 +828,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
                     eq: () => ({
                       eq: () => ({
                         select: vi.fn().mockResolvedValue({
-                          data: [{ id: pageId, fb_page_id: 'page_1001' }],
+                          data: [{ id: pageId, external_destination_id: 'page_1001' }],
                           error: null,
                         }),
                       }),
@@ -819,19 +838,17 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
               }),
             };
           }
-          if (table === 'legacy_queue_items') {
+          if (table === 'queue_items') {
             return {
               update: vi.fn((payload: any) => {
-                if (payload.status === 'skipped') {
+                if (payload.status === 'cancelled') {
                   queueSkipped = true;
                 }
-                return {
-                  eq: () => ({
-                    eq: () => ({
-                      eq: vi.fn().mockResolvedValue({ error: null }),
-                    }),
-                  }),
+                const chain: any = {
+                  eq: vi.fn().mockImplementation(() => chain),
+                  then: (resolve: any) => Promise.resolve({ error: null }).then(resolve),
                 };
+                return chain;
               }),
             };
           }
@@ -874,7 +891,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
-          if (sql.includes('FROM facebook_pages')) {
+          if (sql.includes('FROM destinations')) {
             return Promise.resolve([mockPageRow]);
           }
           return Promise.resolve([]);
@@ -917,10 +934,10 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
-          if (sql.includes('UPDATE facebook_pages')) {
+          if (sql.includes('UPDATE destinations')) {
             return Promise.resolve([]);
           }
-          if (sql.includes('FROM facebook_pages')) {
+          if (sql.includes('FROM destinations')) {
             return Promise.resolve([mockPageRow]);
           }
           return Promise.resolve([]);

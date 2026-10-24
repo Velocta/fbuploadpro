@@ -122,12 +122,11 @@ export async function refreshConnectedPageTokens(
 
     if (supabase) {
       const { data: linkedPages, error: fetchPagesError } = await supabase
-        .from('facebook_pages')
-        .select('id, fb_page_id, status')
-        .eq('facebook_account_id', accountRowId)
-        .eq('user_id', userId)
+        .from('destinations')
+        .select('id, external_destination_id, status, metadata')
+        .eq('account_id', accountRowId)
         .eq('workspace_id', workspaceId)
-        .neq('status', 'disconnected');
+        .eq('platform', 'facebook');
 
       if (fetchPagesError) {
         console.warn(
@@ -136,18 +135,33 @@ export async function refreshConnectedPageTokens(
         );
       }
 
+      // Disconnected destinations are skipped; paused pages (stored
+      // as disconnected + the fb_status marker) still refresh, as
+      // they did when 'paused' was its own status.
       validPages = Array.isArray(linkedPages)
-        ? (linkedPages.filter((p) => Boolean((p as Record<string, unknown>)?.fb_page_id)) as Array<{ id: string; fb_page_id?: string; fbPageId?: string; status?: string }>)
+        ? (linkedPages
+            .filter(
+              (p) =>
+                Boolean(p?.external_destination_id) &&
+                (p.status !== 'disconnected' ||
+                  (p.metadata as Record<string, unknown> | null)?.fb_status ===
+                    'paused')
+            )
+            .map((p) => ({
+              id: p.id,
+              fb_page_id: p.external_destination_id,
+              status: p.status,
+            })) as Array<{ id: string; fb_page_id?: string; fbPageId?: string; status?: string }>)
         : [];
     } else if (legacyDb) {
       const linkedPages = (await legacyDb.query(
-        `SELECT id, fb_page_id, status
-         FROM facebook_pages
-         WHERE facebook_account_id = $1
-           AND user_id = $2
-           AND workspace_id = $3
-           AND status != 'disconnected'`,
-        [accountRowId, userId, workspaceId]
+        `SELECT id, external_destination_id AS fb_page_id, status
+         FROM destinations
+         WHERE account_id = $1
+           AND workspace_id = $2
+           AND platform = 'facebook'
+           AND (status != 'disconnected' OR metadata->>'fb_status' = 'paused')`,
+        [accountRowId, workspaceId]
       )) as Array<{ id: string; fb_page_id?: string; fbPageId?: string; status?: string }>;
 
       validPages = Array.isArray(linkedPages)
@@ -174,30 +188,31 @@ export async function refreshConnectedPageTokens(
         const encryptedPageToken = await encryptToken(rawPageToken, encryptionKey);
         if (supabase) {
           const { error: updateError } = await supabase
-            .from('facebook_pages')
+            .from('destinations')
             .update({
-              encrypted_access_token: encryptedPageToken,
-              status: linkedPage.status === 'invalid_token' ? 'active' : linkedPage.status,
+              encrypted_destination_token: encryptedPageToken,
+              // 'error' is the unified invalid-token state; a fresh
+              // token reactivates the destination.
+              status: linkedPage.status === 'error' ? 'active' : linkedPage.status,
               updated_at: new Date().toISOString(),
             })
             .eq('id', linkedPage.id)
-            .eq('user_id', userId)
             .eq('workspace_id', workspaceId);
 
           if (updateError) {
             console.warn(
-              '[FacebookOAuth] Failed to update facebook_page token:',
+              '[FacebookOAuth] Failed to update destination token:',
               updateError.message
             );
           }
         } else if (legacyDb) {
           await legacyDb.query(
-            `UPDATE facebook_pages
-             SET encrypted_access_token = $1,
-                 status = CASE WHEN status = 'invalid_token' THEN 'active'::facebook_page_status ELSE status END,
+            `UPDATE destinations
+             SET encrypted_destination_token = $1,
+                 status = CASE WHEN status = 'error' THEN 'active' ELSE status END,
                  updated_at = now()
-             WHERE id = $2 AND user_id = $3 AND workspace_id = $4`,
-            [encryptedPageToken, linkedPage.id, userId, workspaceId]
+             WHERE id = $2 AND workspace_id = $3`,
+            [encryptedPageToken, linkedPage.id, workspaceId]
           );
         }
       })
@@ -291,11 +306,11 @@ async function upsertConnectedFacebookAccount(
 
   if (supabase) {
     const { data: existing } = await supabase
-      .from('facebook_accounts')
-      .select('id, status')
-      .eq('user_id', userId)
+      .from('social_accounts')
+      .select('id, status, metadata')
       .eq('workspace_id', workspaceId)
-      .eq('fb_account_id', meProfile.id)
+      .eq('platform', 'facebook')
+      .eq('external_account_id', meProfile.id)
       .maybeSingle();
 
     const alreadyExisted = Boolean(existing && typeof existing.status === 'string');
@@ -303,23 +318,30 @@ async function upsertConnectedFacebookAccount(
     const gender = meProfile.gender ?? null;
     const accountLink = meProfile.link ?? null;
 
+    // gender / account_link live in metadata on the unified row
+    // (spec 120 §7b); merge over whatever is already stored there.
+    const metadata: Record<string, unknown> = {
+      ...((existing?.metadata as Record<string, unknown> | null) ?? {}),
+    };
+    if (gender !== null) metadata.gender = gender;
+    if (accountLink !== null) metadata.account_link = accountLink;
+
     const { data: upserted } = await supabase
-      .from('facebook_accounts')
+      .from('social_accounts')
       .upsert(
         {
-          user_id: userId,
           workspace_id: workspaceId,
-          fb_account_id: meProfile.id,
+          platform: 'facebook',
+          external_account_id: meProfile.id,
           display_name: meProfile.name,
           encrypted_access_token: encryptedToken,
           token_expires_at: expiresAt.toISOString(),
-          profile_picture_url: profilePictureUrl,
-          gender,
-          account_link: accountLink,
+          avatar_url: profilePictureUrl,
+          metadata,
           status: 'active',
           updated_at: new Date().toISOString(),
         },
-        { onConflict: 'workspace_id,fb_account_id' }
+        { onConflict: 'workspace_id,platform,external_account_id' }
       )
       .select('id')
       .single();
@@ -334,8 +356,8 @@ async function upsertConnectedFacebookAccount(
 
   const effectiveDb = legacyDb;
   const existingRows = (await effectiveDb.query(
-    'SELECT id, status FROM facebook_accounts WHERE user_id = $1 AND workspace_id = $2 AND fb_account_id = $3',
-    [userId, workspaceId, meProfile.id]
+    "SELECT id, status FROM social_accounts WHERE workspace_id = $1 AND platform = 'facebook' AND external_account_id = $2",
+    [workspaceId, meProfile.id]
   )) as Array<{ id: string; status?: string }>;
   const alreadyExisted =
     Array.isArray(existingRows) &&
@@ -346,22 +368,22 @@ async function upsertConnectedFacebookAccount(
   const accountLink = meProfile.link ?? null;
 
   const upsertRows = (await effectiveDb.query(
-    `INSERT INTO facebook_accounts (
-      user_id, workspace_id, fb_account_id, display_name, encrypted_access_token, token_expires_at, profile_picture_url, gender, account_link, status, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', now())
-    ON CONFLICT (workspace_id, fb_account_id)
+    `INSERT INTO social_accounts (
+      workspace_id, platform, external_account_id, display_name, encrypted_access_token, token_expires_at, avatar_url, metadata, status, updated_at
+    ) VALUES ($1, 'facebook', $2, $3, $4, $5, $6,
+      jsonb_strip_nulls(jsonb_build_object('gender', $7::text, 'account_link', $8::text)),
+      'active', now())
+    ON CONFLICT (workspace_id, platform, external_account_id)
     DO UPDATE SET
       display_name = EXCLUDED.display_name,
       encrypted_access_token = EXCLUDED.encrypted_access_token,
       token_expires_at = EXCLUDED.token_expires_at,
-      profile_picture_url = EXCLUDED.profile_picture_url,
-      gender = EXCLUDED.gender,
-      account_link = EXCLUDED.account_link,
+      avatar_url = EXCLUDED.avatar_url,
+      metadata = social_accounts.metadata || EXCLUDED.metadata,
       status = 'active',
       updated_at = now()
     RETURNING id`,
     [
-      userId,
       workspaceId,
       meProfile.id,
       meProfile.name,

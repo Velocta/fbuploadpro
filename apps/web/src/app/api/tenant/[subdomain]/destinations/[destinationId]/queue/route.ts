@@ -30,9 +30,10 @@ import {
  * lands in unified `queue_items` (composer create → destination
  * enqueue, PRs 750/756/759) and the worker publishes only from unified
  * `queue_items`. During the cutover the legacy Facebook Page section
- * still reads `legacy_queue_items`, so posts composed on the web no
- * longer appear there — they appear here. Pre-cutover legacy items
- * stay in the Page section until Phase 7 drops the legacy tables.
+ * still read the pre-unification queue table, so posts composed on
+ * the web no longer appeared there — they appeared here. Since the
+ * Phase 7 drop, the Page section reads the unified table too; this
+ * route remains the destination-scoped read.
  *
  * The response also carries the destination's D5 limit state, derived
  * here from the contracts limits config (the single source for the

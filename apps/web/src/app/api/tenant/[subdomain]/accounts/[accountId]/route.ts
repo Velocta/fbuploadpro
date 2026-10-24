@@ -49,15 +49,16 @@ export async function handleDisconnectAccount(
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
     // 4. Count connected pages prior to cascade deletion
     const countRows = (await dbClient.query(
-      'SELECT COUNT(*)::int AS count FROM facebook_pages WHERE facebook_account_id = $1 AND user_id = $2 AND workspace_id = $3',
-      [accountId, session.userId, workspaceId]
+      "SELECT COUNT(*)::int AS count FROM destinations WHERE account_id = $1 AND workspace_id = $2 AND platform = 'facebook'",
+      [accountId, workspaceId]
     )) as Record<string, unknown>[];
     disconnectedPagesCount = Number(countRows?.[0]?.count ?? 0);
 
-    // 5. Delete account record (foreign key ON DELETE CASCADE safely removes linked pages)
+    // 5. Delete account record (foreign key ON DELETE CASCADE safely
+    // removes its destinations and their queued items)
     const result = (await dbClient.query(
-      'DELETE FROM facebook_accounts WHERE id = $1 AND user_id = $2 AND workspace_id = $3 RETURNING id',
-      [accountId, session.userId, workspaceId]
+      "DELETE FROM social_accounts WHERE id = $1 AND workspace_id = $2 AND platform = 'facebook' RETURNING id",
+      [accountId, workspaceId]
     )) as Record<string, unknown>[];
 
     if (!result || result.length === 0) {
@@ -73,19 +74,19 @@ export async function handleDisconnectAccount(
     }
 
     const { count } = await supabase
-      .from('facebook_pages')
+      .from('destinations')
       .select('id', { count: 'exact', head: true })
-      .eq('facebook_account_id', accountId)
-      .eq('user_id', session.userId)
-      .eq('workspace_id', workspaceId);
+      .eq('account_id', accountId)
+      .eq('workspace_id', workspaceId)
+      .eq('platform', 'facebook');
     disconnectedPagesCount = count ?? 0;
 
     const { data: deleted, error: deleteErr } = await supabase
-      .from('facebook_accounts')
+      .from('social_accounts')
       .delete()
       .eq('id', accountId)
-      .eq('user_id', session.userId)
       .eq('workspace_id', workspaceId)
+      .eq('platform', 'facebook')
       .select('id');
 
     if (deleteErr || !deleted || deleted.length === 0) {

@@ -3,10 +3,14 @@
  *
  * Two modes:
  *   hardened (default) — run against a database with ALL migrations
- *     (incl. 20261023120000_rls_rpc_hardening.sql) applied. Every
+ *     (incl. 20261023120000_rls_rpc_hardening.sql AND the Phase 7 drop
+ *     20261024130000_drop_legacy_facebook_schema.sql) applied. Every
  *     assertion must pass:
- *       (a) authenticated + anon are DENIED EXECUTE on the five legacy
- *           RPC overloads; service_role can execute all five.
+ *       (a) Phase 7 drop: the six legacy tables and the six legacy
+ *           RPC signatures are ABSENT from pg_class/pg_proc; the
+ *           unified claim/settle/recover overloads and the retention
+ *           RPC are present; a dropped function is uncallable (42883)
+ *           even for service_role.
  *       (b) authenticated self-update of users.role / users.status
  *           fails; a profile-column update (name) succeeds;
  *           service_role can still update role/status.
@@ -18,24 +22,30 @@
  *           (the app-side admin-client row-creation path). In
  *           vulnerable mode the planted values are stored verbatim,
  *           documenting the hole.
- *       (c) BYOC: authenticated INSERT into a foreign workspace fails,
- *           into an own workspace succeeds, and a planted row whose
- *           workspace belongs to another user is invisible to SELECT.
- *       (d) legacy claim as service_role with p_limit = 100000 returns
- *           at most 100 rows (exactly 100 against a 150-row seed).
+ *       (c) platform_credentials (the unified BYOC home): the
+ *           workspace-owner policy denies an authenticated INSERT
+ *           into a foreign workspace, allows an own-workspace INSERT,
+ *           and a planted row in another user's workspace is
+ *           invisible to SELECT.
  *       (e) regression: the unified claim/settle/recover overloads are
  *           still denied to authenticated and allowed to service_role.
  *       (f) media_download_jobs: all four policies carry
  *           roles = {authenticated}.
  *   vulnerable — run against a database built with
  *     RLS_RPC_MIGRATIONS_UNTIL=20261022140000_claim_rpc_grouped_usage.sql
- *     (pre-hardening). Asserts the holes are OPEN, proving the rig can
- *     actually detect them (and producing the before-state evidence).
+ *     (pre-hardening, pre-drop). Asserts the ORIGINAL holes are OPEN —
+ *     legacy RPC lockdown section (a-legacy), the user_id-only BYOC
+ *     policy (c-legacy), and the uncapped legacy claim (d) — proving
+ *     the rig can actually detect them (and producing the
+ *     before-state evidence). Sections (b)/(b2)/(e)/(f) run in both
+ *     modes.
  *
- * Both modes print an ACL/policy dump (pg_proc.proacl for the ten
- * claim/settle/recover/counts/fail signatures in scope + pg_policies
- * for users, workspace_byoc_credentials, media_download_jobs). Pass
- * RLS_RPC_DUMP_FILE=<path> to also write the dump to a file.
+ * Both modes print an ACL/policy dump (pg_proc.proacl for the
+ * claim/settle/recover/counts/fail/slot-claim/retention signatures in
+ * scope + pg_policies for users, platform_credentials,
+ * media_download_jobs — plus the legacy BYOC table in vulnerable
+ * mode). Pass RLS_RPC_DUMP_FILE=<path> to also write the dump to a
+ * file.
  *
  * Usage:
  *   RLS_RPC_PG_URL=postgres://postgres@/rls117?host=<socket dir>&port=<port> \
@@ -161,8 +171,102 @@ async function probeCall(pool: Pool, call: RpcCall): Promise<void> {
   check(svc.ok, `${call.name} executable by service_role`, `${svc.code} ${svc.message}`);
 }
 
+const DROPPED_TABLES = [
+  'legacy_publish_logs',
+  'legacy_queue_items',
+  'page_queue_slots',
+  'facebook_pages',
+  'facebook_accounts',
+  'workspace_byoc_credentials',
+] as const;
+
+/**
+ * Hardened-mode replacement for the legacy sections (Phase 7): the
+ * legacy schema is gone, so instead of asserting its lockdown the rig
+ * asserts its ABSENCE — by exact pg_proc identity arguments, so a
+ * surviving legacy overload cannot hide behind the shared names —
+ * plus the survival of everything the drop had to keep.
+ */
+async function sectionDropAbsence(pool: Pool): Promise<void> {
+  console.log('\n(a) Phase 7 drop — legacy objects absent, unified intact');
+  const tables = await pool.query<{ relname: string }>(
+    `SELECT relname FROM pg_class
+      WHERE relnamespace = 'public'::regnamespace AND relkind = 'r'
+        AND relname = ANY($1::text[])`,
+    [[...DROPPED_TABLES]]
+  );
+  check(
+    tables.rows.length === 0,
+    'all six legacy tables absent from pg_class',
+    `still present: ${tables.rows.map((r) => r.relname).join(', ')}`
+  );
+
+  const fns = await pool.query<{ proname: string; args: string }>(
+    `SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args
+       FROM pg_proc p
+      WHERE p.pronamespace = 'public'::regnamespace
+        AND p.proname = ANY($1::text[])`,
+    [[
+      'claim_due_queue_items',
+      'settle_queue_item_outcome',
+      'recover_stuck_publishing_items',
+      'get_page_queue_status_counts',
+      'fail_stuck_download_jobs',
+      'claim_queue_slot_insert',
+      'cleanup_expired_publish_history',
+    ]]
+  );
+  const has = (name: string, pred: (args: string) => boolean): boolean =>
+    fns.rows.some((r) => r.proname === name && pred(r.args));
+
+  check(!has('get_page_queue_status_counts', () => true), 'get_page_queue_status_counts(UUID, UUID) absent');
+  check(!has('fail_stuck_download_jobs', () => true), 'fail_stuck_download_jobs(INT) absent (media_download_jobs table kept)');
+  check(!has('claim_queue_slot_insert', () => true), 'claim_queue_slot_insert(9-arg) absent');
+  check(
+    !has('claim_due_queue_items', (a) => a.includes('p_max_per_page')),
+    'legacy claim_due_queue_items(INT, INT) absent'
+  );
+  check(
+    has('claim_due_queue_items', (a) => a.includes('p_platform')),
+    'unified claim_due_queue_items(platform, …) present'
+  );
+  check(
+    !has('settle_queue_item_outcome', (a) => a.includes('p_fb_page_id')),
+    'legacy settle_queue_item_outcome(16-arg, INT codes) absent'
+  );
+  check(
+    has('settle_queue_item_outcome', (a) => a.includes('p_destination_id')),
+    'unified settle_queue_item_outcome(…destination…) present'
+  );
+  check(
+    !has('recover_stuck_publishing_items', (a) => !a.includes('p_platform')),
+    'legacy recover_stuck_publishing_items(INT) absent'
+  );
+  check(
+    has('recover_stuck_publishing_items', (a) => a.includes('p_platform')),
+    'unified recover_stuck_publishing_items(platform, …) present'
+  );
+  check(
+    has('cleanup_expired_publish_history', () => true),
+    'retention RPC cleanup_expired_publish_history intact'
+  );
+
+  const gone = await attempt(
+    pool,
+    'service_role',
+    null,
+    'SELECT * FROM public.get_page_queue_status_counts($1::uuid, $2::uuid)',
+    [PAGE_A, USER_A]
+  );
+  check(
+    !gone.ok && gone.code === '42883',
+    'dropped counts RPC uncallable even for service_role (42883)',
+    gone.ok ? 'call succeeded' : `${gone.code} ${gone.message}`
+  );
+}
+
 async function sectionLegacyRpcs(pool: Pool, legacyItem: string): Promise<void> {
-  console.log('\n(a) legacy RPC EXECUTE lockdown');
+  console.log('\n(a-legacy) legacy RPC EXECUTE lockdown');
   const legacyCalls: RpcCall[] = [
     { name: 'claim_due_queue_items(INT, INT)', sql: 'SELECT * FROM public.claim_due_queue_items(5, 5)', params: [] },
     {
@@ -271,7 +375,7 @@ async function sectionUsersInsert(pool: Pool): Promise<void> {
 }
 
 async function sectionByoc(pool: Pool): Promise<void> {
-  console.log('\n(c) workspace_byoc_credentials compound policy');
+  console.log('\n(c-legacy) workspace_byoc_credentials compound policy');
   const insertSql = `INSERT INTO public.workspace_byoc_credentials (workspace_id, user_id, fb_app_id, encrypted_fb_app_secret)
                      VALUES ($1::uuid, $2::uuid, $3, 'dummy-secret')`;
   const foreignIns = await attempt(pool, 'authenticated', USER_A, insertSql, [WS_C, USER_A, 'app-foreign']);
@@ -310,9 +414,48 @@ async function sectionByoc(pool: Pool): Promise<void> {
   );
 }
 
+/**
+ * The unified BYOC home's policy (spec 120 §5): workspace-owner
+ * compound USING/WITH CHECK, correct from creation — the assertions
+ * are the same in both modes (the vulnerable database predates the
+ * hardening but not the unified schema).
+ */
+async function sectionCredentials(pool: Pool): Promise<void> {
+  console.log('\n(c) platform_credentials workspace-owner policy');
+  const insertSql = `INSERT INTO public.platform_credentials (workspace_id, platform, client_id, encrypted_client_secret)
+                     VALUES ($1::uuid, 'facebook', $2, 'dummy-secret')`;
+  const foreignIns = await attempt(pool, 'authenticated', USER_A, insertSql, [WS_C, 'app-foreign']);
+  check(
+    !foreignIns.ok && foreignIns.code === '42501',
+    'credentials INSERT with foreign workspace_id -> denied (RLS WITH CHECK)',
+    foreignIns.ok ? 'insert succeeded' : `${foreignIns.code} ${foreignIns.message}`
+  );
+  await asRole(
+    pool,
+    'authenticated',
+    USER_A,
+    async (client) => {
+      const res = await client.query(insertSql, [WS_A2, 'app-a2']);
+      check(res.rowCount === 1, 'credentials INSERT with own workspace_id succeeds');
+      const seen = await client.query<{ n: number }>(
+        'SELECT count(*)::int AS n FROM public.platform_credentials WHERE workspace_id = $1::uuid',
+        [WS_B]
+      );
+      check(seen.rows[0]?.n === 0, "planted credentials row in B's workspace is invisible to A (workspace-owner USING)");
+      const own = await client.query<{ n: number }>(
+        'SELECT count(*)::int AS n FROM public.platform_credentials WHERE workspace_id = ANY($1::uuid[])',
+        [[WS_A, WS_A2]]
+      );
+      check(own.rows[0]?.n === 2, 'own credentials rows remain visible to A');
+    },
+    { commit: true }
+  );
+}
+
 async function sectionClaimCap(pool: Pool): Promise<void> {
   console.log('\n(d) legacy claim p_limit cap');
   await pool.query('SELECT public.rls117_reset()');
+  await pool.query('SELECT public.rls117_reset_legacy()');
   await pool.query('SELECT public.rls117_seed_legacy_items(150)');
   let claimed = -1;
   await asRole(pool, 'service_role', null, async (client) => {
@@ -390,7 +533,8 @@ async function dump(pool: Pool): Promise<string> {
       WHERE p.pronamespace = 'public'::regnamespace
         AND p.proname IN ('claim_due_queue_items', 'settle_queue_item_outcome',
                           'recover_stuck_publishing_items',
-                          'get_page_queue_status_counts', 'fail_stuck_download_jobs')
+                          'get_page_queue_status_counts', 'fail_stuck_download_jobs',
+                          'claim_queue_slot_insert', 'cleanup_expired_publish_history')
       ORDER BY p.proname, args`
   );
   const pols = await pool.query<{
@@ -404,12 +548,12 @@ async function dump(pool: Pool): Promise<string> {
     `SELECT tablename, policyname, roles, cmd, qual, with_check
        FROM pg_policies
       WHERE schemaname = 'public'
-        AND tablename IN ('users', 'workspace_byoc_credentials', 'media_download_jobs')
+        AND tablename IN ('users', 'workspace_byoc_credentials', 'platform_credentials', 'media_download_jobs')
       ORDER BY tablename, policyname`
   );
   const lines: string[] = ['--- pg_proc.proacl (in-scope functions) ---'];
   for (const r of fns.rows) lines.push(`${r.proname}(${r.args})  ${r.acl}`);
-  lines.push('--- pg_policies (users / workspace_byoc_credentials / media_download_jobs) ---');
+  lines.push('--- pg_policies (users / workspace_byoc_credentials / platform_credentials / media_download_jobs) ---');
   for (const r of pols.rows) {
     lines.push(
       `${r.tablename} :: ${r.policyname} :: roles=${JSON.stringify(r.roles)} :: cmd=${r.cmd} :: using=${r.qual ?? ''} :: with_check=${r.with_check ?? ''}`
@@ -424,17 +568,31 @@ async function main(): Promise<void> {
   const pool = new Pool({ connectionString: url });
   try {
     await pool.query(readFileSync(join(here, 'fixtures.sql'), 'utf8'));
+    if (!hardened) {
+      // The vulnerable database predates the Phase 7 drop, so the
+      // legacy fixture graph can (and must) be seeded there.
+      await pool.query(readFileSync(join(here, 'fixtures-legacy.sql'), 'utf8'));
+    }
     await pool.query('SELECT public.rls117_reset()');
-    await pool.query('SELECT public.rls117_seed_legacy_items(3)');
-    const seeded = await pool.query<{ id: string }>('SELECT id FROM public.legacy_queue_items ORDER BY id LIMIT 1');
-    const legacyItem = seeded.rows[0]?.id as string;
 
     console.log(`\n== spec 117 rls-rpc rig — mode: ${mode} ==`);
-    await sectionLegacyRpcs(pool, legacyItem);
+    if (hardened) {
+      await sectionDropAbsence(pool);
+    } else {
+      await pool.query('SELECT public.rls117_reset_legacy()');
+      await pool.query('SELECT public.rls117_seed_legacy_items(3)');
+      const seeded = await pool.query<{ id: string }>('SELECT id FROM public.legacy_queue_items ORDER BY id LIMIT 1');
+      const legacyItem = seeded.rows[0]?.id as string;
+      await sectionLegacyRpcs(pool, legacyItem);
+    }
     await sectionUsers(pool);
     await sectionUsersInsert(pool);
-    await sectionByoc(pool);
-    await sectionClaimCap(pool);
+    if (hardened) {
+      await sectionCredentials(pool);
+    } else {
+      await sectionByoc(pool);
+      await sectionClaimCap(pool);
+    }
     await sectionUnified(pool);
     await sectionDownloadJobs(pool);
 

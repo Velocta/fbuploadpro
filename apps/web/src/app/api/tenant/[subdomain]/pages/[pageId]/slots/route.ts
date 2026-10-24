@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
-  type DatabasePageQueueSlotRow,
   canAccessTenant,
   CreateQueueSlotRequestSchema,
   getSessionSecret,
@@ -16,6 +15,49 @@ import { logServerError } from '@/lib/server-analytics';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import { recomputeSlotScheduledTime } from '@/lib/slot-scheduler';
 import type { SupabaseClient } from '@supabase/supabase-js';
+
+/**
+ * Posting-slot routes for the Facebook Page section, on the unified
+ * tables (Phase 7): pages are `destinations`, slots are
+ * `posting_slots` (time_of_day + kind[]), the page timezone lives on
+ * the destination row, and pending items are unified `queue_items`.
+ * The wire shape is unchanged: slot rows carry the workspace owner's
+ * id as `userId` (the unified tables are workspace-scoped; the owner
+ * is the user identity the wire contract has always reported).
+ */
+
+const DEFAULT_ALLOWED_FORMATS = ['text', 'image', 'reel', 'video', 'story'];
+
+/** Slot row as consumed here (spec 137 §3.7), in wire field names. */
+interface SlotRow {
+  id: string;
+  fb_page_id: string;
+  slot_time: string;
+  is_active: boolean;
+  allowed_formats?: string[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+async function fetchWorkspaceOwnerId(
+  client: DatabaseClient | SupabaseClient,
+  workspaceId: string
+): Promise<string | null> {
+  if ('query' in client && typeof (client as DatabaseClient).query === 'function') {
+    const rows = (await (client as DatabaseClient).query(
+      'SELECT owner_id FROM workspaces WHERE id = $1',
+      [workspaceId]
+    )) as Record<string, unknown>[];
+    const owner = rows?.[0]?.owner_id;
+    return typeof owner === 'string' ? owner : null;
+  }
+  const { data } = await (client as SupabaseClient)
+    .from('workspaces')
+    .select('owner_id')
+    .eq('id', workspaceId)
+    .maybeSingle();
+  return data?.owner_id ?? null;
+}
 
 export async function handleListQueueSlots(
   request: NextRequest,
@@ -47,32 +89,30 @@ export async function handleListQueueSlots(
     return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }
 
-/** Slot row as consumed here (spec 137 §3.7): the contracts slot row
- * plus the allowed_formats column the contracts type does not model. */
-type SlotRow = DatabasePageQueueSlotRow & { allowed_formats?: string[] | null };
-
   let slotRows: SlotRow[] = [];
   let pageTimezone = 'UTC';
+  let ownerId: string | null = null;
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    // 1. Verify page exists and belongs to user and workspace
+    // 1. Verify page exists and belongs to the workspace
     const pageRows = (await dbClient.query(
-      'SELECT id, timezone FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
-      [pageId, session.userId, workspaceId]
+      "SELECT id, timezone FROM destinations WHERE id = $1 AND workspace_id = $2 AND platform = 'facebook'",
+      [pageId, workspaceId]
     )) as Record<string, unknown>[];
 
     if (!pageRows || pageRows.length === 0) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
     pageTimezone = String(pageRows[0].timezone || 'UTC');
+    ownerId = await fetchWorkspaceOwnerId(dbClient, workspaceId);
 
-    // 2. Fetch slots for this page and user
+    // 2. Fetch slots for this page
     slotRows = await dbClient.query<SlotRow>(
-      `SELECT id, user_id, fb_page_id, slot_time, is_active, allowed_formats, created_at, updated_at
-       FROM page_queue_slots
-       WHERE fb_page_id = $1 AND user_id = $2
-       ORDER BY slot_time ASC`,
-      [pageId, session.userId]
+      `SELECT id, destination_id AS fb_page_id, time_of_day AS slot_time, is_active, kind AS allowed_formats, created_at, updated_at
+       FROM posting_slots
+       WHERE destination_id = $1
+       ORDER BY time_of_day ASC`,
+      [pageId]
     );
   } else {
     const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient | null;
@@ -81,39 +121,47 @@ type SlotRow = DatabasePageQueueSlotRow & { allowed_formats?: string[] | null };
     }
 
     const { data: pageData, error: pageErr } = await supabase
-      .from('facebook_pages')
+      .from('destinations')
       .select('id, timezone')
       .eq('id', pageId)
-      .eq('user_id', session.userId)
       .eq('workspace_id', workspaceId)
+      .eq('platform', 'facebook')
       .maybeSingle();
 
     if (pageErr || !pageData) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
     pageTimezone = String(pageData.timezone || 'UTC');
+    ownerId = await fetchWorkspaceOwnerId(supabase, workspaceId);
 
     const { data: slotsData, error: slotsErr } = await supabase
-      .from('page_queue_slots')
-      .select('id, user_id, fb_page_id, slot_time, is_active, allowed_formats, created_at, updated_at')
-      .eq('fb_page_id', pageId)
-      .eq('user_id', session.userId)
-      .order('slot_time', { ascending: true });
+      .from('posting_slots')
+      .select('id, destination_id, time_of_day, is_active, kind, created_at, updated_at')
+      .eq('destination_id', pageId)
+      .order('time_of_day', { ascending: true });
 
     if (slotsErr) {
       return NextResponse.json({ error: slotsErr.message }, { status: 500 });
     }
-    slotRows = slotsData || [];
+    slotRows = (slotsData || []).map((s) => ({
+      id: s.id,
+      fb_page_id: s.destination_id,
+      slot_time: typeof s.time_of_day === 'string' ? s.time_of_day : String(s.time_of_day),
+      is_active: s.is_active,
+      allowed_formats: s.kind,
+      created_at: s.created_at,
+      updated_at: s.updated_at,
+    }));
   }
 
   const slots = slotRows.map((row) => ({
     id: row.id,
-    userId: row.user_id,
+    userId: ownerId ?? session.userId,
     pageId: row.fb_page_id,
     slotTime: typeof row.slot_time === 'string' ? row.slot_time : String(row.slot_time),
     timezone: pageTimezone,
     isActive: Boolean(row.is_active),
-    allowedFormats: Array.isArray(row.allowed_formats) ? row.allowed_formats : ['text', 'image', 'reel', 'video', 'story'],
+    allowedFormats: Array.isArray(row.allowed_formats) ? row.allowed_formats : DEFAULT_ALLOWED_FORMATS,
     createdAt: new Date(row.created_at as string).toISOString(),
     updatedAt: new Date(row.updated_at as string).toISOString(),
   }));
@@ -179,32 +227,34 @@ export async function handleCreateQueueSlot(
     return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }
 
+  const allowedFormats = parsed.data.allowedFormats ?? DEFAULT_ALLOWED_FORMATS;
+
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    // 1. Verify page exists and belongs to user and workspace
+    // 1. Verify page exists and belongs to the workspace
     const pageRows = (await dbClient.query(
-      'SELECT id, timezone FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
-      [pageId, session.userId, workspaceId]
+      "SELECT id, timezone FROM destinations WHERE id = $1 AND workspace_id = $2 AND platform = 'facebook'",
+      [pageId, workspaceId]
     )) as Record<string, unknown>[];
 
     if (!pageRows || pageRows.length === 0) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
     const pageTimezone = String(pageRows[0].timezone || 'UTC');
+    const ownerId = await fetchWorkspaceOwnerId(dbClient, workspaceId);
 
-    // 2. Insert slot
+    // 2. Insert slot (UNIQUE(destination_id, time_of_day) -> 23505 -> 409)
     try {
-      const allowedFormats = parsed.data.allowedFormats ?? ['text', 'image', 'reel', 'video', 'story'];
       const rows = (await dbClient.query(
-        `INSERT INTO page_queue_slots (user_id, fb_page_id, slot_time, is_active, allowed_formats, created_at, updated_at)
-         VALUES ($1, $2, $3, true, $4, now(), now())
-         RETURNING id, user_id, fb_page_id, slot_time, is_active, allowed_formats, created_at, updated_at`,
-        [session.userId, pageId, parsed.data.slotTime, allowedFormats]
+        `INSERT INTO posting_slots (destination_id, time_of_day, is_active, kind, created_at, updated_at)
+         VALUES ($1, $2, true, $3, now(), now())
+         RETURNING id, destination_id AS fb_page_id, time_of_day AS slot_time, is_active, kind AS allowed_formats, created_at, updated_at`,
+        [pageId, parsed.data.slotTime, allowedFormats]
       )) as Record<string, unknown>[];
 
       const row = rows[0];
       const responsePayload = PageQueueSlotSchema.parse({
         id: row.id,
-        userId: row.user_id,
+        userId: ownerId ?? session.userId,
         pageId: row.fb_page_id,
         slotTime: typeof row.slot_time === 'string' ? row.slot_time : String(row.slot_time),
         timezone: pageTimezone,
@@ -246,29 +296,28 @@ export async function handleCreateQueueSlot(
     }
 
     const { data: pageData, error: pageErr } = await supabase
-      .from('facebook_pages')
+      .from('destinations')
       .select('id, timezone')
       .eq('id', pageId)
-      .eq('user_id', session.userId)
       .eq('workspace_id', workspaceId)
+      .eq('platform', 'facebook')
       .maybeSingle();
 
     if (pageErr || !pageData) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
     const pageTimezone = String(pageData.timezone || 'UTC');
+    const ownerId = await fetchWorkspaceOwnerId(supabase, workspaceId);
 
-    const allowedFormats = parsed.data.allowedFormats ?? ['text', 'image', 'reel', 'video', 'story'];
     const { data: inserted, error: insertErr } = await supabase
-      .from('page_queue_slots')
+      .from('posting_slots')
       .insert({
-        user_id: session.userId,
-        fb_page_id: pageId,
-        slot_time: parsed.data.slotTime,
+        destination_id: pageId,
+        time_of_day: parsed.data.slotTime,
         is_active: true,
-        allowed_formats: allowedFormats,
+        kind: allowedFormats,
       })
-      .select('id, user_id, fb_page_id, slot_time, is_active, allowed_formats, created_at, updated_at')
+      .select('id, destination_id, time_of_day, is_active, kind, created_at, updated_at')
       .single();
 
     if (insertErr) {
@@ -289,12 +338,12 @@ export async function handleCreateQueueSlot(
 
     const responsePayload = PageQueueSlotSchema.parse({
       id: inserted.id,
-      userId: inserted.user_id,
-      pageId: inserted.fb_page_id,
-      slotTime: typeof inserted.slot_time === 'string' ? inserted.slot_time : String(inserted.slot_time),
+      userId: ownerId ?? session.userId,
+      pageId: inserted.destination_id,
+      slotTime: typeof inserted.time_of_day === 'string' ? inserted.time_of_day : String(inserted.time_of_day),
       timezone: pageTimezone,
       isActive: Boolean(inserted.is_active),
-      allowedFormats: Array.isArray(inserted.allowed_formats) ? inserted.allowed_formats : allowedFormats,
+      allowedFormats: Array.isArray(inserted.kind) ? inserted.kind : allowedFormats,
       createdAt: new Date(inserted.created_at).toISOString(),
       updatedAt: new Date(inserted.updated_at).toISOString(),
     });
@@ -306,16 +355,15 @@ export async function handleCreateQueueSlot(
 async function realignPendingQueueItemsPostgres(
   dbClient: DatabaseClient,
   pageId: string,
-  userId: string,
   newTimezone: string
 ): Promise<number> {
   const pendingRows = (await dbClient.query(
-    `SELECT qi.id, qi.scheduled_time, s.slot_time
-     FROM legacy_queue_items qi
-     JOIN page_queue_slots s ON s.id = qi.slot_id
-     WHERE qi.fb_page_id = $1 AND qi.user_id = $2 AND qi.status = 'queued'
+    `SELECT qi.id, qi.scheduled_time, s.time_of_day AS slot_time
+     FROM queue_items qi
+     JOIN posting_slots s ON s.id = qi.slot_id
+     WHERE qi.destination_id = $1 AND qi.status = 'queued'
      ORDER BY qi.scheduled_time ASC`,
-    [pageId, userId]
+    [pageId]
   )) as Record<string, unknown>[];
 
   if (!pendingRows || pendingRows.length === 0) {
@@ -339,7 +387,7 @@ async function realignPendingQueueItemsPostgres(
     occupiedTimes.add(newScheduledTime.getTime());
 
     await dbClient.query(
-      `UPDATE legacy_queue_items
+      `UPDATE queue_items
        SET scheduled_time = $1, updated_at = now()
        WHERE id = $2`,
       [newScheduledTime.toISOString(), row.id]
@@ -353,14 +401,12 @@ async function realignPendingQueueItemsPostgres(
 async function realignPendingQueueItemsSupabase(
   supabase: SupabaseClient,
   pageId: string,
-  userId: string,
   newTimezone: string
 ): Promise<number> {
   const { data: queueData, error: queueErr } = await supabase
-    .from('legacy_queue_items')
+    .from('queue_items')
     .select('id, scheduled_time, slot_id')
-    .eq('fb_page_id', pageId)
-    .eq('user_id', userId)
+    .eq('destination_id', pageId)
     .eq('status', 'queued')
     .not('slot_id', 'is', null)
     .order('scheduled_time', { ascending: true });
@@ -371,9 +417,9 @@ async function realignPendingQueueItemsSupabase(
 
   const slotIds = [...new Set(queueData.map((item) => item.slot_id).filter(Boolean))];
   const { data: slotsData, error: slotsErr } = await supabase
-    .from('page_queue_slots')
-    .select('id, slot_time')
-    .in('id', slotIds);
+    .from('posting_slots')
+    .select('id, time_of_day')
+    .in('id', slotIds as string[]);
 
   if (slotsErr || !slotsData || slotsData.length === 0) {
     return 0;
@@ -381,7 +427,7 @@ async function realignPendingQueueItemsSupabase(
 
   const slotMap = new Map<string, string>();
   for (const s of slotsData) {
-    slotMap.set(s.id, typeof s.slot_time === 'string' ? s.slot_time : String(s.slot_time));
+    slotMap.set(s.id, typeof s.time_of_day === 'string' ? s.time_of_day : String(s.time_of_day));
   }
 
   const occupiedTimes = new Set<number>();
@@ -389,7 +435,7 @@ async function realignPendingQueueItemsSupabase(
   let realignedCount = 0;
 
   for (const item of queueData) {
-    const slotTime = slotMap.get(item.slot_id);
+    const slotTime = item.slot_id ? slotMap.get(item.slot_id) : undefined;
     if (!slotTime) continue;
 
     const originalTime = new Date(item.scheduled_time);
@@ -403,7 +449,7 @@ async function realignPendingQueueItemsSupabase(
     occupiedTimes.add(newScheduledTime.getTime());
 
     await supabase
-      .from('legacy_queue_items')
+      .from('queue_items')
       .update({
         scheduled_time: newScheduledTime.toISOString(),
         updated_at: now.toISOString(),
@@ -418,16 +464,15 @@ async function realignPendingQueueItemsSupabase(
 async function updateScheduleTimezonePostgres(
   dbClient: DatabaseClient,
   pageId: string,
-  userId: string,
   workspaceId: string,
   newTimezone: string
 ): Promise<{ notFound?: boolean; updatedCount?: number; realignedQueueCount?: number }> {
   const updatedPages = (await dbClient.query(
-    `UPDATE facebook_pages
+    `UPDATE destinations
      SET timezone = $1, updated_at = now()
-     WHERE id = $2 AND user_id = $3 AND workspace_id = $4
+     WHERE id = $2 AND workspace_id = $3 AND platform = 'facebook'
      RETURNING id`,
-    [newTimezone, pageId, userId, workspaceId]
+    [newTimezone, pageId, workspaceId]
   )) as Record<string, unknown>[];
 
   if (!updatedPages || updatedPages.length === 0) {
@@ -435,14 +480,13 @@ async function updateScheduleTimezonePostgres(
   }
 
   const slotRows = await dbClient.query<{ count: number }>(
-    'SELECT count(*)::int as count FROM page_queue_slots WHERE fb_page_id = $1 AND user_id = $2',
-    [pageId, userId]
+    'SELECT count(*)::int as count FROM posting_slots WHERE destination_id = $1',
+    [pageId]
   );
 
   const realignedQueueCount = await realignPendingQueueItemsPostgres(
     dbClient,
     pageId,
-    userId,
     newTimezone
   );
 
@@ -455,19 +499,18 @@ async function updateScheduleTimezonePostgres(
 async function updateScheduleTimezoneSupabase(
   supabase: SupabaseClient,
   pageId: string,
-  userId: string,
   workspaceId: string,
   newTimezone: string
 ): Promise<{ notFound?: boolean; error?: string; updatedCount?: number; realignedQueueCount?: number }> {
   const { data: updatedPage, error: updateErr } = await supabase
-    .from('facebook_pages')
+    .from('destinations')
     .update({
       timezone: newTimezone,
       updated_at: new Date().toISOString(),
     })
     .eq('id', pageId)
-    .eq('user_id', userId)
     .eq('workspace_id', workspaceId)
+    .eq('platform', 'facebook')
     .select('id')
     .maybeSingle();
 
@@ -480,15 +523,13 @@ async function updateScheduleTimezoneSupabase(
   }
 
   const { count } = await supabase
-    .from('page_queue_slots')
+    .from('posting_slots')
     .select('id', { count: 'exact', head: true })
-    .eq('fb_page_id', pageId)
-    .eq('user_id', userId);
+    .eq('destination_id', pageId);
 
   const realignedQueueCount = await realignPendingQueueItemsSupabase(
     supabase,
     pageId,
-    userId,
     newTimezone
   );
 
@@ -552,7 +593,6 @@ export async function handleUpdateQueueScheduleTimezone(
     const result = await updateScheduleTimezonePostgres(
       dbClient as DatabaseClient,
       pageId,
-      session.userId,
       workspaceId,
       newTimezone
     );
@@ -578,7 +618,6 @@ export async function handleUpdateQueueScheduleTimezone(
   const result = await updateScheduleTimezoneSupabase(
     supabase,
     pageId,
-    session.userId,
     workspaceId,
     newTimezone
   );

@@ -23,7 +23,7 @@ filename order, that
    function's EXECUTE ACL); and
 3. `posting_slots` carries `uq_posting_slots_destination_time` —
    UNIQUE (destination_id, time_of_day) over ALL rows (spec 139 N5;
-   the plain shape restores the legacy `page_queue_slots` guarantee —
+   the plain shape restores the pre-unification slot table's guarantee —
    `is_active` is toggled in place and removal is a hard DELETE, so it
    is a plain constraint, not a partial index): a duplicate insert at
    the same destination + time fails 23505 (active or inactive), a

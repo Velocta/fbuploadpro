@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
-  type DatabasePageQueueSlotRow,
   canAccessTenant,
   getSessionSecret,
   PageQueueSlotSchema,
@@ -10,7 +9,75 @@ import {
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import { logServerError } from '@/lib/server-analytics';
+import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
+
+/**
+ * Single-slot update/delete for the Facebook Page section, on the
+ * unified `posting_slots` table (Phase 7). Scoping is by workspace
+ * (resolved from the tenant subdomain) + destination — the unified
+ * tables carry no per-user column; the workspace is the isolation
+ * boundary. (The pre-unification handlers checked page ownership by
+ * user only and never resolved the workspace; the workspace check is
+ * strictly tighter.)
+ */
+
+const DEFAULT_ALLOWED_FORMATS = ['text', 'image', 'reel', 'video', 'story'];
+
+interface SlotWireRow {
+  id: string;
+  fb_page_id: string;
+  slot_time: string;
+  is_active: boolean;
+  allowed_formats?: string[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function toSlotResponse(
+  row: SlotWireRow,
+  userId: string,
+  pageTimezone: string,
+  fallbackFormats: string[]
+) {
+  return PageQueueSlotSchema.parse({
+    id: row.id,
+    userId,
+    pageId: row.fb_page_id,
+    slotTime: typeof row.slot_time === 'string' ? row.slot_time : String(row.slot_time),
+    timezone: pageTimezone,
+    isActive: Boolean(row.is_active),
+    allowedFormats: Array.isArray(row.allowed_formats) ? row.allowed_formats : fallbackFormats,
+    createdAt: new Date(row.created_at as string).toISOString(),
+    updatedAt: new Date(row.updated_at as string).toISOString(),
+  });
+}
+
+async function authenticateSlotRequest(
+  request: NextRequest,
+  subdomain: string
+) {
+  const sessionSecret = getSessionSecret();
+
+  const sessionCookie = request.cookies.get('fbup_session')?.value;
+  if (!sessionCookie) {
+    return { errorResponse: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  }
+
+  let session;
+  try {
+    session = await verifySessionToken(sessionCookie, sessionSecret);
+  } catch (_e) {
+    return { errorResponse: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  }
+
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
+    return { errorResponse: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+  }
+
+  return { session };
+}
 
 export async function handleUpdateQueueSlot(
   request: NextRequest,
@@ -19,24 +86,9 @@ export async function handleUpdateQueueSlot(
   slotId: string,
   dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
-  const sessionSecret = getSessionSecret();
-
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const access = canAccessTenant(session, subdomain);
-  if (!access.allowed) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const auth = await authenticateSlotRequest(request, subdomain);
+  if (auth.errorResponse) return auth.errorResponse;
+  const session = auth.session!;
 
   let rawBody: unknown;
   try {
@@ -56,11 +108,16 @@ export async function handleUpdateQueueSlot(
     );
   }
 
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
+
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    // 1. Verify page exists and belongs to user
+    // 1. Verify page exists and belongs to the workspace
     const pageRows = (await dbClient.query(
-      'SELECT id, timezone FROM facebook_pages WHERE id = $1 AND user_id = $2',
-      [pageId, session.userId]
+      "SELECT id, timezone FROM destinations WHERE id = $1 AND workspace_id = $2 AND platform = 'facebook'",
+      [pageId, workspaceId]
     )) as Record<string, unknown>[];
 
     if (!pageRows || pageRows.length === 0) {
@@ -68,23 +125,30 @@ export async function handleUpdateQueueSlot(
     }
     const pageTimezone = String(pageRows[0].timezone || 'UTC');
 
-    // 2. Update slot scoped to user, page, and slot id
+    const ownerRows = (await dbClient.query(
+      'SELECT owner_id FROM workspaces WHERE id = $1',
+      [workspaceId]
+    )) as Record<string, unknown>[];
+    const ownerId =
+      typeof ownerRows?.[0]?.owner_id === 'string' ? ownerRows[0].owner_id : session.userId;
+
+    // 2. Update slot scoped to workspace page + slot id
+    // (UNIQUE(destination_id, time_of_day) -> 23505 -> 409)
     try {
       const updateRows = (await dbClient.query(
-        `UPDATE page_queue_slots
-         SET slot_time = COALESCE($1, slot_time),
+        `UPDATE posting_slots
+         SET time_of_day = COALESCE($1, time_of_day),
              is_active = COALESCE($2, is_active),
-             allowed_formats = COALESCE($3, allowed_formats),
+             kind = COALESCE($3, kind),
              updated_at = now()
-         WHERE id = $4 AND fb_page_id = $5 AND user_id = $6
-         RETURNING id, user_id, fb_page_id, slot_time, is_active, allowed_formats, created_at, updated_at`,
+         WHERE id = $4 AND destination_id = $5
+         RETURNING id, destination_id AS fb_page_id, time_of_day AS slot_time, is_active, kind AS allowed_formats, created_at, updated_at`,
         [
           parsed.data.slotTime ?? null,
           parsed.data.isActive ?? null,
           parsed.data.allowedFormats ?? null,
           slotId,
           pageId,
-          session.userId,
         ]
       )) as Record<string, unknown>[];
 
@@ -92,20 +156,11 @@ export async function handleUpdateQueueSlot(
         return NextResponse.json({ error: 'Slot not found' }, { status: 404 });
       }
 
-      const row = updateRows[0];
-      const responsePayload = PageQueueSlotSchema.parse({
-        id: row.id,
-        userId: row.user_id,
-        pageId: row.fb_page_id,
-        slotTime: typeof row.slot_time === 'string' ? row.slot_time : String(row.slot_time),
-        timezone: pageTimezone,
-        isActive: Boolean(row.is_active),
-        allowedFormats: Array.isArray(row.allowed_formats) ? row.allowed_formats : ['text', 'image', 'reel', 'video', 'story'],
-        createdAt: new Date(row.created_at as string).toISOString(),
-        updatedAt: new Date(row.updated_at as string).toISOString(),
-      });
-
-      return NextResponse.json(responsePayload, { status: 200 });
+      const row = updateRows[0] as unknown as SlotWireRow;
+      return NextResponse.json(
+        toSlotResponse(row, ownerId, pageTimezone, DEFAULT_ALLOWED_FORMATS),
+        { status: 200 }
+      );
     } catch (err: unknown) {
       if (
         err !== null &&
@@ -137,10 +192,11 @@ export async function handleUpdateQueueSlot(
     }
 
     const { data: pageData, error: pageErr } = await supabase
-      .from('facebook_pages')
+      .from('destinations')
       .select('id, timezone')
       .eq('id', pageId)
-      .eq('user_id', session.userId)
+      .eq('workspace_id', workspaceId)
+      .eq('platform', 'facebook')
       .maybeSingle();
 
     if (pageErr || !pageData) {
@@ -148,20 +204,31 @@ export async function handleUpdateQueueSlot(
     }
     const pageTimezone = String(pageData.timezone || 'UTC');
 
-    const updatePayload: Partial<DatabasePageQueueSlotRow> & { allowed_formats?: string[] } = {
+    const { data: workspaceData } = await supabase
+      .from('workspaces')
+      .select('owner_id')
+      .eq('id', workspaceId)
+      .maybeSingle();
+    const ownerId = workspaceData?.owner_id ?? session.userId;
+
+    const updatePayload: {
+      time_of_day?: string;
+      is_active?: boolean;
+      kind?: string[];
+      updated_at: string;
+    } = {
       updated_at: new Date().toISOString(),
     };
-    if (parsed.data.slotTime !== undefined) updatePayload.slot_time = parsed.data.slotTime;
+    if (parsed.data.slotTime !== undefined) updatePayload.time_of_day = parsed.data.slotTime;
     if (parsed.data.isActive !== undefined) updatePayload.is_active = parsed.data.isActive;
-    if (parsed.data.allowedFormats !== undefined) updatePayload.allowed_formats = parsed.data.allowedFormats;
+    if (parsed.data.allowedFormats !== undefined) updatePayload.kind = parsed.data.allowedFormats;
 
     const { data: updated, error: updateErr } = await supabase
-      .from('page_queue_slots')
+      .from('posting_slots')
       .update(updatePayload)
       .eq('id', slotId)
-      .eq('fb_page_id', pageId)
-      .eq('user_id', session.userId)
-      .select('id, user_id, fb_page_id, slot_time, is_active, allowed_formats, created_at, updated_at')
+      .eq('destination_id', pageId)
+      .select('id, destination_id, time_of_day, is_active, kind, created_at, updated_at')
       .maybeSingle();
 
     if (updateErr) {
@@ -184,19 +251,26 @@ export async function handleUpdateQueueSlot(
       return NextResponse.json({ error: 'Slot not found' }, { status: 404 });
     }
 
-    const responsePayload = PageQueueSlotSchema.parse({
-      id: updated.id,
-      userId: updated.user_id,
-      pageId: updated.fb_page_id,
-      slotTime: typeof updated.slot_time === 'string' ? updated.slot_time : String(updated.slot_time),
-      timezone: pageTimezone,
-      isActive: Boolean(updated.is_active),
-      allowedFormats: Array.isArray(updated.allowed_formats) ? updated.allowed_formats : ['text', 'image', 'reel', 'video', 'story'],
-      createdAt: new Date(updated.created_at).toISOString(),
-      updatedAt: new Date(updated.updated_at).toISOString(),
-    });
-
-    return NextResponse.json(responsePayload, { status: 200 });
+    return NextResponse.json(
+      toSlotResponse(
+        {
+          id: updated.id,
+          fb_page_id: updated.destination_id,
+          slot_time:
+            typeof updated.time_of_day === 'string'
+              ? updated.time_of_day
+              : String(updated.time_of_day),
+          is_active: updated.is_active,
+          allowed_formats: updated.kind,
+          created_at: updated.created_at,
+          updated_at: updated.updated_at,
+        },
+        ownerId,
+        pageTimezone,
+        DEFAULT_ALLOWED_FORMATS
+      ),
+      { status: 200 }
+    );
   }
 }
 
@@ -207,42 +281,32 @@ export async function handleDeleteQueueSlot(
   slotId: string,
   dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
-  const sessionSecret = getSessionSecret();
+  const auth = await authenticateSlotRequest(request, subdomain);
+  if (auth.errorResponse) return auth.errorResponse;
+  const session = auth.session!;
 
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const access = canAccessTenant(session, subdomain);
-  if (!access.allowed) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    // 1. Verify page exists and belongs to user
+    // 1. Verify page exists and belongs to the workspace
     const pageRows = (await dbClient.query(
-      'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2',
-      [pageId, session.userId]
+      "SELECT id FROM destinations WHERE id = $1 AND workspace_id = $2 AND platform = 'facebook'",
+      [pageId, workspaceId]
     )) as Record<string, unknown>[];
 
     if (!pageRows || pageRows.length === 0) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
 
-    // 2. Delete slot scoped to slotId, pageId, and userId
+    // 2. Delete slot scoped to slotId + pageId
     const deleteRows = (await dbClient.query(
-      `DELETE FROM page_queue_slots
-       WHERE id = $1 AND fb_page_id = $2 AND user_id = $3
+      `DELETE FROM posting_slots
+       WHERE id = $1 AND destination_id = $2
        RETURNING id`,
-      [slotId, pageId, session.userId]
+      [slotId, pageId]
     )) as Record<string, unknown>[];
 
     if (!deleteRows || deleteRows.length === 0) {
@@ -257,10 +321,11 @@ export async function handleDeleteQueueSlot(
     }
 
     const { data: pageData, error: pageErr } = await supabase
-      .from('facebook_pages')
+      .from('destinations')
       .select('id')
       .eq('id', pageId)
-      .eq('user_id', session.userId)
+      .eq('workspace_id', workspaceId)
+      .eq('platform', 'facebook')
       .maybeSingle();
 
     if (pageErr || !pageData) {
@@ -268,11 +333,10 @@ export async function handleDeleteQueueSlot(
     }
 
     const { data: deleted, error: delErr } = await supabase
-      .from('page_queue_slots')
+      .from('posting_slots')
       .delete()
       .eq('id', slotId)
-      .eq('fb_page_id', pageId)
-      .eq('user_id', session.userId)
+      .eq('destination_id', pageId)
       .select('id');
 
     if (delErr || !deleted || deleted.length === 0) {

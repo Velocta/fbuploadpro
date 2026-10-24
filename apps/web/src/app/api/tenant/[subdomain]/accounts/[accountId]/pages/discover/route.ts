@@ -68,8 +68,8 @@ export async function handleDiscoverPages(
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
     const accounts = await dbClient.query<AccountLookupRow>(
-      'SELECT * FROM facebook_accounts WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
-      [accountId, session.userId, workspaceId]
+      "SELECT encrypted_access_token, display_name FROM social_accounts WHERE id = $1 AND workspace_id = $2 AND platform = 'facebook'",
+      [accountId, workspaceId]
     );
 
     if (!accounts || accounts.length === 0 || !accounts[0]) {
@@ -81,8 +81,8 @@ export async function handleDiscoverPages(
     account = accounts[0];
 
     importedRows = await dbClient.query<ImportedPageIdRow>(
-      "SELECT fb_page_id FROM facebook_pages WHERE user_id = $1 AND workspace_id = $2 AND status != 'disconnected'",
-      [session.userId, workspaceId]
+      "SELECT external_destination_id AS fb_page_id FROM destinations WHERE workspace_id = $1 AND platform = 'facebook' AND (status != 'disconnected' OR metadata->>'fb_status' = 'paused')",
+      [workspaceId]
     );
   } else {
     const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<Database> | null;
@@ -91,11 +91,11 @@ export async function handleDiscoverPages(
     }
 
     const { data: accData, error: accErr } = await supabase
-      .from('facebook_accounts')
-      .select('*')
+      .from('social_accounts')
+      .select('encrypted_access_token, display_name')
       .eq('id', accountId)
-      .eq('user_id', session.userId)
       .eq('workspace_id', workspaceId)
+      .eq('platform', 'facebook')
       .maybeSingle();
 
     if (accErr || !accData) {
@@ -107,13 +107,24 @@ export async function handleDiscoverPages(
     account = accData;
 
     const { data: pageRows } = await supabase
-      .from('facebook_pages')
-      .select('fb_page_id')
-      .eq('user_id', session.userId)
+      .from('destinations')
+      .select('external_destination_id, status, metadata')
       .eq('workspace_id', workspaceId)
-      .neq('status', 'disconnected');
+      .eq('platform', 'facebook');
 
-    importedRows = pageRows || [];
+    const destinationRows = (pageRows || []) as unknown as Array<{
+      external_destination_id: string;
+      status: string;
+      metadata: Record<string, unknown> | null;
+    }>;
+    importedRows = destinationRows
+      .filter(
+        (r) =>
+          r.status !== 'disconnected' || r.metadata?.fb_status === 'paused'
+      )
+      .map((r) => ({
+        fb_page_id: r.external_destination_id,
+      }));
   }
 
   const encryptedToken =

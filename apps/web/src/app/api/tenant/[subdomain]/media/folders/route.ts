@@ -111,10 +111,10 @@ export async function handleListFolders(
   // pages/[pageId]) and replaces the previous 1 + N pattern, which
   // issued one { count: 'exact', head: true } query per folder.
   // Follow-up: for libraries with very large item counts, a grouped
-  // RPC (like get_page_queue_status_counts) would avoid transferring
-  // one folder_id row per item; that requires a migration and is out
-  // of scope for this PR. This approach is bounded by item count and
-  // issues a constant number of requests regardless of folder count.
+  // RPC would avoid transferring one folder_id row per item; that
+  // requires a migration and is out of scope for this PR. This
+  // approach is bounded by item count and issues a constant number of
+  // requests regardless of folder count.
   const itemFolderRes = await supabase
     .from('media_items')
     .select('folder_id')

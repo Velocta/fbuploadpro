@@ -30,7 +30,7 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
   });
 
   describe('Disconnect Page (DELETE /api/tenant/[subdomain]/pages/[pageId])', () => {
-    it('soft-deletes specific page under (user_id, pageId) by setting status = disconnected, wiping encrypted_access_token, and transitioning queued posts to skipped', async () => {
+    it('soft-deletes specific page under (workspace_id, pageId) by setting status = disconnected, wiping the destination token, and cancelling queued posts', async () => {
       let updatedParams: any[] = [];
       let skippedQueueParams: any[] = [];
       let skippedSql = '';
@@ -39,11 +39,11 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
-          if (sql.includes('UPDATE facebook_pages')) {
+          if (sql.includes('UPDATE destinations')) {
             updatedParams = params;
-            return Promise.resolve([{ id: pageId, fb_page_id: 'page_1001' }]);
+            return Promise.resolve([{ id: pageId, fbPageId: 'page_1001' }]);
           }
-          if (sql.includes('UPDATE legacy_queue_items')) {
+          if (sql.includes('UPDATE queue_items')) {
             skippedSql = sql;
             skippedQueueParams = params;
             return Promise.resolve([]);
@@ -67,16 +67,17 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
       expect(json.success).toBe(true);
       expect(json.pageId).toBe(pageId);
 
-      // Verify soft-delete parameters include compound user_id check and queue cancellation
+      // Verify soft-delete parameters are workspace-scoped and the
+      // queued unified items are cancelled under the same workspace.
       expect(updatedParams[0]).toBe(pageId);
-      expect(updatedParams[1]).toBe(userId);
-      expect(skippedSql).toContain("SET status = 'skipped'");
-      expect(skippedQueueParams).toEqual([userId, pageId]);
+      expect(updatedParams[1]).toBe('ws_123');
+      expect(skippedSql).toContain("status = 'cancelled'");
+      expect(skippedQueueParams).toEqual(['ws_123', pageId]);
     });
 
-    it('transitions queued items to skipped via Supabase client on page disconnect', async () => {
-      const queueUpdateMock = vi.fn().mockReturnThis();
-      const queueEqMock = vi.fn().mockReturnThis();
+    it('transitions queued items to cancelled via Supabase client on page disconnect', async () => {
+      const queueUpdateMock = vi.fn();
+      const queueEqMock = vi.fn();
 
       const mockSupabase = {
         from: vi.fn().mockImplementation((table: string) => {
@@ -94,27 +95,38 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
               }),
             };
           }
-          if (table === 'facebook_pages') {
+          if (table === 'destinations') {
             const pageBuilder = {
               eq: vi.fn().mockImplementation(() => pageBuilder),
               select: vi.fn().mockResolvedValue({
-                data: [{ id: pageId, fb_page_id: 'page_1001' }],
+                data: [{ id: pageId, external_destination_id: 'page_1001' }],
                 error: null,
               }),
             };
             return {
+              select: vi.fn().mockImplementation(() => {
+                const chain: any = {
+                  eq: vi.fn().mockImplementation(() => chain),
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { metadata: {} },
+                    error: null,
+                  }),
+                };
+                return chain;
+              }),
               update: vi.fn().mockReturnValue(pageBuilder),
             };
           }
-          if (table === 'legacy_queue_items') {
+          if (table === 'queue_items') {
+            const queueChain: any = {
+              eq: queueEqMock,
+              then: (resolve: any) =>
+                Promise.resolve({ data: [], error: null }).then(resolve),
+            };
+            queueEqMock.mockImplementation(() => queueChain);
+            queueUpdateMock.mockImplementation(() => queueChain);
             return {
-              update: queueUpdateMock.mockReturnValue({
-                eq: queueEqMock.mockReturnValue({
-                  eq: queueEqMock.mockReturnValue({
-                    eq: vi.fn().mockResolvedValue({ data: [], error: null }),
-                  }),
-                }),
-              }),
+              update: queueUpdateMock,
             };
           }
           return {};
@@ -133,9 +145,9 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
       expect(res.status).toBe(200);
 
       expect(queueUpdateMock).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'skipped' })
+        expect.objectContaining({ status: 'cancelled' })
       );
-      expect(queueEqMock).toHaveBeenCalledWith('fb_page_id', pageId);
+      expect(queueEqMock).toHaveBeenCalledWith('destination_id', pageId);
     });
 
     it('returns 404 when page does not exist or belongs to another user', async () => {
@@ -171,7 +183,7 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
   });
 
   describe('Disconnect Account (DELETE /api/tenant/[subdomain]/accounts/[accountId])', () => {
-    it('deletes account under (user_id, accountId), cascading linked pages, returning disconnected count', async () => {
+    it('deletes account under (workspace_id, accountId), cascading linked destinations, returning disconnected count', async () => {
       let deletedAccountParams: any[] = [];
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string, params: any[]) => {
@@ -181,7 +193,7 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
           if (sql.includes('SELECT COUNT')) {
             return Promise.resolve([{ count: 2 }]);
           }
-          if (sql.includes('DELETE FROM facebook_accounts')) {
+          if (sql.includes('DELETE FROM social_accounts')) {
             deletedAccountParams = params;
             return Promise.resolve([{ id: accountId }]);
           }
@@ -211,7 +223,7 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
       expect(json.disconnectedPagesCount).toBe(2);
 
       expect(deletedAccountParams[0]).toBe(accountId);
-      expect(deletedAccountParams[1]).toBe(userId);
+      expect(deletedAccountParams[1]).toBe('ws_123');
     });
 
     it('returns 404 when account does not exist or belongs to another user', async () => {

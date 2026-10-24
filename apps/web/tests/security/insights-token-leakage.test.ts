@@ -59,8 +59,10 @@ describe('Security Audit: Insights Zero Token Leakage & Compound Isolation (T179
         if (sql.includes('FROM workspaces')) {
           return [{ id: 'ws_a' }];
         }
-        if (sql.includes('FROM facebook_pages')) {
-          if (params[1] === userIdA) {
+        if (sql.includes('FROM destinations')) {
+          // Destination lookup is workspace-scoped: $2 is the
+          // workspace resolved from the authenticated session.
+          if (params[1] === 'ws_a') {
             return [
               {
                 id: pageId,
@@ -147,19 +149,13 @@ describe('Security Audit: Insights Zero Token Leakage & Compound Isolation (T179
         if (sql.includes('FROM workspaces')) {
           return [{ id: 'ws_b' }];
         }
-        // Query strictly requires user_id = $2
-        if (params[1] === userIdB) {
-          return []; // Not found for User B!
+        // The destination lookup is strictly scoped to the caller's
+        // workspace ($2 = ws_b); the page lives in ws_a, so User B's
+        // workspace sees nothing.
+        if (sql.includes('FROM destinations')) {
+          return [];
         }
-        return [
-          {
-            id: pageId,
-            fb_page_id: 'fb_page_99999',
-            page_name: 'Acme Official',
-            encrypted_access_token: sampleCiphertext,
-            status: 'active',
-          },
-        ];
+        return [];
       }),
     } as unknown as DatabaseClient;
 
@@ -225,8 +221,11 @@ describe('Security Audit: Insights Zero Token Leakage & Compound Isolation (T179
 
   it('repeated live proxy responses maintain zero token leakage and private headers', async () => {
     const mockDb = {
-      query: vi.fn().mockImplementation(async (_sql: string, params: any[]) => {
-        if (params[1] === userIdA) {
+      query: vi.fn().mockImplementation(async (sql: string) => {
+        if (sql.includes('FROM workspaces')) {
+          return [{ id: 'ws_a' }];
+        }
+        if (sql.includes('FROM destinations')) {
           return [
             {
               id: pageId,

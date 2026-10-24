@@ -108,7 +108,10 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
     it('returns 404 Not Found if queue item does not belong to user or does not exist', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('FROM legacy_queue_items')) {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('FROM queue_items')) {
             return Promise.resolve([]);
           }
           return Promise.resolve([]);
@@ -133,7 +136,10 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
     it('returns 400 Bad Request if trying to update an already published queue item', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items')) {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('SELECT') && sql.includes('FROM queue_items')) {
             return Promise.resolve([
               {
                 id: itemId,
@@ -165,22 +171,25 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
       const updatedTime = '2026-10-08T20:00:00.000Z';
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items qi')) {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('SELECT') && sql.includes('FROM queue_items')) {
             return Promise.resolve([
               {
                 id: itemId,
                 user_id: userId,
-                fb_page_id: pageId,
+                destination_id: pageId,
                 slot_id: slotId,
-                media_id: mediaId,
+                media_item_id: mediaId,
                 scheduled_time: new Date('2026-10-08T18:00:00.000Z'),
                 caption: 'Original caption',
                 first_comment: 'Original comment',
                 status: 'queued',
                 retry_count: 0,
                 max_retries: 3,
-                fb_post_id: null,
-                fb_comment_id: null,
+                external_post_id: null,
+                external_comment_id: null,
                 published_at: null,
                 created_at: new Date('2026-10-07T12:00:00.000Z'),
                 updated_at: new Date('2026-10-07T12:00:00.000Z'),
@@ -193,22 +202,26 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
               },
             ]);
           }
-          if (sql.includes('UPDATE legacy_queue_items')) {
+          if (sql.includes('UPDATE queue_items')) {
             return Promise.resolve([
               {
                 id: itemId,
                 user_id: userId,
-                fb_page_id: pageId,
+                destination_id: pageId,
                 slot_id: slotId,
-                media_id: mediaId,
+                media_item_id: mediaId,
                 scheduled_time: new Date(updatedTime),
                 caption: 'Updated caption',
                 first_comment: 'Updated first comment',
-                status: 'skipped',
+                // Unified storage: the wire 'skipped' PATCH writes
+                // 'cancelled' (the unified vocabulary has no
+                // 'skipped'); the response reports the stored
+                // unified status, 'cancelled'.
+                status: 'cancelled',
                 retry_count: 0,
                 max_retries: 3,
-                fb_post_id: null,
-                fb_comment_id: null,
+                external_post_id: null,
+                external_comment_id: null,
                 published_at: null,
                 created_at: new Date('2026-10-07T12:00:00.000Z'),
                 updated_at: new Date('2026-10-07T13:00:00.000Z'),
@@ -248,7 +261,7 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
       expect(data.caption).toBe('Updated caption');
       expect(data.firstComment).toBe('Updated first comment');
       expect(data.scheduledTime).toBe(updatedTime);
-      expect(data.status).toBe('skipped');
+      expect(data.status).toBe('cancelled');
       expect(data.media).toBeDefined();
       expect(data.media.name).toBe('video.mp4');
     });
@@ -256,7 +269,10 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
     it('works with the Next.js PATCH route handler wrapper', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items')) {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('SELECT') && sql.includes('FROM queue_items')) {
             return Promise.resolve([
               {
                 id: itemId,
@@ -265,22 +281,22 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
               },
             ]);
           }
-          if (sql.includes('UPDATE legacy_queue_items')) {
+          if (sql.includes('UPDATE queue_items')) {
             return Promise.resolve([
               {
                 id: itemId,
                 user_id: userId,
-                fb_page_id: pageId,
+                destination_id: pageId,
                 slot_id: slotId,
-                media_id: mediaId,
+                media_item_id: mediaId,
                 scheduled_time: new Date('2026-10-08T18:00:00.000Z'),
                 caption: 'Updated via wrapper',
                 first_comment: null,
                 status: 'queued',
                 retry_count: 0,
                 max_retries: 3,
-                fb_post_id: null,
-                fb_comment_id: null,
+                external_post_id: null,
+                external_comment_id: null,
                 published_at: null,
                 created_at: new Date('2026-10-07T12:00:00.000Z'),
                 updated_at: new Date('2026-10-07T13:00:00.000Z'),
@@ -346,7 +362,10 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
     it('returns 404 Not Found if item does not belong to user or does not exist', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items')) {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('SELECT') && sql.includes('FROM queue_items')) {
             return Promise.resolve([]);
           }
           return Promise.resolve([]);
@@ -367,7 +386,10 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
     it('returns 400 Bad Request if trying to delete an already published queue item', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items')) {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('SELECT') && sql.includes('FROM queue_items')) {
             return Promise.resolve([
               {
                 id: itemId,
@@ -394,7 +416,10 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
     it('returns 200 OK removing item from queue', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items')) {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('SELECT') && sql.includes('FROM queue_items')) {
             return Promise.resolve([
               {
                 id: itemId,
@@ -403,7 +428,7 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
               },
             ]);
           }
-          if (sql.includes('DELETE FROM legacy_queue_items')) {
+          if (sql.includes('DELETE FROM queue_items')) {
             return Promise.resolve([{ id: itemId }]);
           }
           return Promise.resolve([]);
@@ -443,7 +468,10 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
     it('returns 404 Not Found if item does not belong to user or does not exist', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items')) {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('SELECT') && sql.includes('FROM queue_items')) {
             return Promise.resolve([]);
           }
           return Promise.resolve([]);
@@ -464,7 +492,10 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
     it('returns 400 Bad Request if trying to publish-now an already published queue item', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items')) {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('SELECT') && sql.includes('FROM queue_items')) {
             return Promise.resolve([
               {
                 id: itemId,
@@ -492,16 +523,19 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
       let updateExecutedWithNow = false;
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items')) {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('SELECT') && sql.includes('FROM queue_items')) {
             return Promise.resolve([
               {
                 id: itemId,
                 user_id: userId,
-                status: 'skipped', // e.g. was previously skipped or queued
+                status: 'cancelled', // unified form of a previously skipped item
               },
             ]);
           }
-          if (sql.includes('UPDATE legacy_queue_items') && sql.includes("status = 'queued'")) {
+          if (sql.includes('UPDATE queue_items') && sql.includes("status = 'queued'")) {
             updateExecutedWithNow = true;
             return Promise.resolve([{ id: itemId }]);
           }

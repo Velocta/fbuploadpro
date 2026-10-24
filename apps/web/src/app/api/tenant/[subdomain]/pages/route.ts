@@ -7,18 +7,23 @@ import {
   canAccessTenant,
   type DatabaseClient,
   type Database,
-  type DatabaseFacebookPageRow,
+  type FacebookPageStatus,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
+import {
+  DESTINATION_STATUS_TO_WIRE_SQL,
+  unifiedDestinationStatusToWire,
+} from '@/lib/server/facebook-wire';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * One facebook_pages row as the list mapper consumes it (spec 137
- * §3.7): snake_case (SQL/Supabase) and camelCase (legacy) spellings;
- * follower/picture fields stay `unknown` here because the extract*
- * helpers below narrow them with typeof — that narrowing is the type
- * boundary for values the database returns untyped.
+ * One destinations row as the list mapper consumes it (spec 137 §3.7),
+ * already translated to the wire page vocabulary: snake_case
+ * (SQL/Supabase) and camelCase spellings; follower/picture fields stay
+ * `unknown` here because the extract* helpers below narrow them with
+ * typeof — that narrowing is the type boundary for values the
+ * database returns untyped.
  */
 interface PageListRow {
   id: string;
@@ -39,7 +44,7 @@ interface PageListRow {
   currentFollowers?: unknown;
   followers_count?: unknown;
   followersCount?: unknown;
-  status?: DatabaseFacebookPageRow['status'] | null;
+  status?: FacebookPageStatus | null;
   tasks?: unknown;
   rate_limited_at?: string | Date | null;
   rateLimitedAt?: string | Date | null;
@@ -84,81 +89,65 @@ function parsePageTasks(rawTasks: unknown): string[] {
   return [];
 }
 
-async function fetchLegacyPages(
+async function fetchSqlPages(
   dbClient: DatabaseClient,
-  workspaceId: string,
-  userId: string,
-  role?: string
+  workspaceId: string
 ): Promise<PageListRow[]> {
-  if (role === 'admin') {
-    return dbClient.query<PageListRow>(
-      `SELECT 
-        p.id,
-        p.facebook_account_id,
-        a.display_name AS account_display_name,
-        p.fb_page_id,
-        p.page_name,
-        p.profile_picture_url,
-        p.category,
-        p.starting_followers,
-        p.current_followers,
-        p.status,
-        p.tasks,
-        p.rate_limited_at,
-        p.created_at,
-        p.updated_at
-      FROM facebook_pages p
-      LEFT JOIN facebook_accounts a ON a.id = p.facebook_account_id
-      WHERE p.workspace_id = $1
-        AND p.status != 'disconnected'
-      ORDER BY p.created_at DESC`,
-      [workspaceId]
-    );
-  }
-
+  // The unified tables are workspace-scoped (no per-user column): the
+  // resolved workspace is the isolation boundary, for admins and
+  // members alike — the pre-unification admin/member split collapsed
+  // into this single query.
   return dbClient.query<PageListRow>(
-    `SELECT 
-      p.id,
-      p.facebook_account_id,
+    `SELECT
+      d.id,
+      d.account_id AS facebook_account_id,
       a.display_name AS account_display_name,
-      p.fb_page_id,
-      p.page_name,
-      p.profile_picture_url,
-      p.category,
-      p.starting_followers,
-      p.current_followers,
-      p.status,
-      p.tasks,
-      p.rate_limited_at,
-      p.created_at,
-      p.updated_at
-    FROM facebook_pages p
-    LEFT JOIN facebook_accounts a ON a.id = p.facebook_account_id
-    WHERE p.user_id = $1
-      AND p.workspace_id = $2
-      AND p.status != 'disconnected'
-    ORDER BY p.created_at DESC`,
-    [userId, workspaceId]
+      d.external_destination_id AS fb_page_id,
+      d.name AS page_name,
+      d.avatar_url AS profile_picture_url,
+      d.metadata->>'category' AS category,
+      (d.metadata->>'starting_followers')::int AS starting_followers,
+      (d.metadata->>'current_followers')::int AS current_followers,
+      ${DESTINATION_STATUS_TO_WIRE_SQL} AS status,
+      d.metadata->'tasks' AS tasks,
+      d.metadata->>'rate_limited_at' AS rate_limited_at,
+      d.created_at,
+      d.updated_at
+    FROM destinations d
+    LEFT JOIN social_accounts a ON a.id = d.account_id
+    WHERE d.workspace_id = $1
+      AND d.platform = 'facebook'
+      AND (d.status != 'disconnected' OR d.metadata->>'fb_status' = 'paused')
+    ORDER BY d.created_at DESC`,
+    [workspaceId]
   );
+}
+
+interface SupabaseDestinationJoinRow {
+  id: string;
+  account_id: string;
+  external_destination_id: string;
+  name: string;
+  avatar_url: string | null;
+  metadata: Record<string, unknown> | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  social_accounts: { display_name: string } | null;
 }
 
 async function fetchSupabasePages(
   supabase: SupabaseClient<Database>,
-  workspaceId: string,
-  userId: string,
-  role?: string
+  workspaceId: string
 ): Promise<{ rows?: PageListRow[]; error?: string }> {
-  let query = supabase
-    .from('facebook_pages')
-    .select('*, facebook_accounts(display_name)')
+  const { data: pageData, error } = await supabase
+    .from('destinations')
+    .select(
+      'id, account_id, external_destination_id, name, avatar_url, metadata, status, created_at, updated_at, social_accounts(display_name)'
+    )
     .eq('workspace_id', workspaceId)
-    .neq('status', 'disconnected');
-
-  if (role !== 'admin') {
-    query = query.eq('user_id', userId);
-  }
-
-  const { data: pageData, error } = await query.order('created_at', { ascending: false });
+    .eq('platform', 'facebook')
+    .order('created_at', { ascending: false });
 
   if (error) {
     return { error: error.message };
@@ -166,18 +155,38 @@ async function fetchSupabasePages(
 
   // The contracts Database type resolves this joined select to never[]
   // (no Relationships metadata for supabase-js), so the result is
-  // asserted once, here at the boundary, to the shape select('*')
-  // actually returns (rate_limited_at is a real column the contracts
-  // row type does not model yet).
-  const pageRows = (pageData || []) as Array<
-    DatabaseFacebookPageRow & {
-      facebook_accounts: { display_name: string } | null;
-      rate_limited_at?: string | null;
-    }
-  >;
-  const rows = pageRows.map((p) => ({
-    ...p,
-    account_display_name: p.facebook_accounts?.display_name || '',
+  // asserted once, here at the boundary, to the shape the select
+  // actually returns.
+  const pageRows = (pageData || []) as unknown as SupabaseDestinationJoinRow[];
+  // Disconnected destinations are excluded (a paused page — stored as
+  // disconnected + the fb_status marker — stays listed, as before).
+  const visibleRows = pageRows.filter(
+    (p) => p.status !== 'disconnected' || p.metadata?.fb_status === 'paused'
+  );
+  const rows: PageListRow[] = visibleRows.map((p) => ({
+    id: p.id,
+    facebook_account_id: p.account_id,
+    account_display_name: p.social_accounts?.display_name || '',
+    fb_page_id: p.external_destination_id,
+    page_name: p.name,
+    profile_picture_url: p.avatar_url,
+    category: typeof p.metadata?.category === 'string' ? p.metadata.category : null,
+    starting_followers:
+      typeof p.metadata?.starting_followers === 'number'
+        ? p.metadata.starting_followers
+        : null,
+    current_followers:
+      typeof p.metadata?.current_followers === 'number'
+        ? p.metadata.current_followers
+        : null,
+    status: unifiedDestinationStatusToWire(p.status, p.metadata),
+    tasks: p.metadata?.tasks ?? [],
+    rate_limited_at:
+      typeof p.metadata?.rate_limited_at === 'string'
+        ? p.metadata.rate_limited_at
+        : null,
+    created_at: p.created_at,
+    updated_at: p.updated_at,
   }));
 
   return { rows };
@@ -219,14 +228,14 @@ export async function handleListPages(
   let rows: PageListRow[] = [];
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    rows = await fetchLegacyPages(dbClient as DatabaseClient, workspaceId, session.userId, session.role);
+    rows = await fetchSqlPages(dbClient as DatabaseClient, workspaceId);
   } else {
     const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<Database> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
 
-    const res = await fetchSupabasePages(supabase, workspaceId, session.userId, session.role);
+    const res = await fetchSupabasePages(supabase, workspaceId);
     if (res.error) {
       return NextResponse.json({ error: res.error }, { status: 500 });
     }

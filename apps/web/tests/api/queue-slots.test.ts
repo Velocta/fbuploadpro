@@ -63,7 +63,7 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
-          if (sql.includes('FROM facebook_pages')) {
+          if (sql.includes('FROM destinations')) {
             return Promise.resolve([]);
           }
           return Promise.resolve([]);
@@ -93,10 +93,10 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
-          if (sql.includes('FROM facebook_pages')) {
+          if (sql.includes('FROM destinations')) {
             return Promise.resolve([{ id: pageId, timezone: 'America/New_York' }]);
           }
-          if (sql.includes('FROM page_queue_slots')) {
+          if (sql.includes('FROM posting_slots')) {
             return Promise.resolve([
               {
                 id: slotId,
@@ -185,7 +185,7 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
-          if (sql.includes('FROM facebook_pages')) {
+          if (sql.includes('FROM destinations')) {
             return Promise.resolve([]);
           }
           return Promise.resolve([]);
@@ -215,10 +215,10 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
-          if (sql.includes('FROM facebook_pages')) {
+          if (sql.includes('FROM destinations')) {
             return Promise.resolve([{ id: pageId, timezone: 'UTC' }]);
           }
-          if (sql.includes('INSERT INTO page_queue_slots')) {
+          if (sql.includes('INSERT INTO posting_slots')) {
             return Promise.resolve([
               {
                 id: slotId,
@@ -265,10 +265,10 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
-          if (sql.includes('FROM facebook_pages')) {
+          if (sql.includes('FROM destinations')) {
             return Promise.resolve([{ id: pageId, timezone: 'UTC' }]);
           }
-          if (sql.includes('INSERT INTO page_queue_slots')) {
+          if (sql.includes('INSERT INTO posting_slots')) {
             const err: any = new Error('duplicate key value');
             err.code = '23505';
             return Promise.reject(err);
@@ -331,7 +331,7 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
     it('returns 404 when page does not exist or does not belong to user', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('FROM facebook_pages')) {
+          if (sql.includes('FROM destinations')) {
             return Promise.resolve([]);
           }
           return Promise.resolve([]);
@@ -359,10 +359,13 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
     it('returns 404 when slot does not exist', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('FROM facebook_pages')) {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('FROM destinations')) {
             return Promise.resolve([{ id: pageId, timezone: 'UTC' }]);
           }
-          if (sql.includes('UPDATE page_queue_slots')) {
+          if (sql.includes('UPDATE posting_slots')) {
             return Promise.resolve([]);
           }
           return Promise.resolve([]);
@@ -392,10 +395,13 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
     it('returns 200 and updates slot active state, slotTime, or timezone', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('FROM facebook_pages')) {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('FROM destinations')) {
             return Promise.resolve([{ id: pageId, timezone: 'UTC' }]);
           }
-          if (sql.includes('UPDATE page_queue_slots')) {
+          if (sql.includes('UPDATE posting_slots')) {
             return Promise.resolve([
               {
                 id: slotId,
@@ -438,10 +444,13 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
     it('returns 409 Conflict if updated slot_time conflicts with existing slot on page', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('FROM facebook_pages')) {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('FROM destinations')) {
             return Promise.resolve([{ id: pageId, timezone: 'UTC' }]);
           }
-          if (sql.includes('UPDATE page_queue_slots')) {
+          if (sql.includes('UPDATE posting_slots')) {
             const err: any = new Error('duplicate key value');
             err.code = '23505';
             return Promise.reject(err);
@@ -503,7 +512,7 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
     it('returns 404 when page does not exist or does not belong to user', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('FROM facebook_pages')) {
+          if (sql.includes('FROM destinations')) {
             return Promise.resolve([]);
           }
           return Promise.resolve([]);
@@ -530,10 +539,13 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
     it('returns 404 when slot does not exist', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('FROM facebook_pages')) {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('FROM destinations')) {
             return Promise.resolve([{ id: pageId }]);
           }
-          if (sql.includes('DELETE FROM page_queue_slots')) {
+          if (sql.includes('DELETE FROM posting_slots')) {
             return Promise.resolve([]);
           }
           return Promise.resolve([]);
@@ -562,10 +574,13 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
     it('returns 200 with { success: true, slotId } on successful deletion', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('FROM facebook_pages')) {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('FROM destinations')) {
             return Promise.resolve([{ id: pageId }]);
           }
-          if (sql.includes('DELETE FROM page_queue_slots')) {
+          if (sql.includes('DELETE FROM posting_slots')) {
             return Promise.resolve([{ id: slotId }]);
           }
           return Promise.resolve([]);
@@ -667,7 +682,7 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
-          if (sql.includes('UPDATE facebook_pages')) {
+          if (sql.includes('UPDATE destinations')) {
             return Promise.resolve([]);
           }
           return Promise.resolve([]);
@@ -693,16 +708,16 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
       expect(data.error).toBe('Page not found');
     });
 
-    it('returns 200 with { success: true, timezone, updatedCount, realignedQueueCount } when updating timezone on facebook_pages', async () => {
+    it('returns 200 with { success: true, timezone, updatedCount, realignedQueueCount } when updating timezone on destinations', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
-          if (sql.includes('UPDATE facebook_pages')) {
+          if (sql.includes('UPDATE destinations')) {
             return Promise.resolve([{ id: pageId }]);
           }
-          if (sql.includes('SELECT count(*)::int as count FROM page_queue_slots')) {
+          if (sql.includes('SELECT count(*)::int as count FROM posting_slots')) {
             return Promise.resolve([{ count: 3 }]);
           }
           return Promise.resolve([]);
@@ -738,13 +753,13 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
-          if (sql.includes('UPDATE facebook_pages')) {
+          if (sql.includes('UPDATE destinations')) {
             return Promise.resolve([{ id: pageId }]);
           }
-          if (sql.includes('SELECT count(*)::int as count FROM page_queue_slots')) {
+          if (sql.includes('SELECT count(*)::int as count FROM posting_slots')) {
             return Promise.resolve([{ count: 2 }]);
           }
-          if (sql.includes('FROM legacy_queue_items qi')) {
+          if (sql.includes('FROM queue_items qi')) {
             return Promise.resolve([
               {
                 id: 'queue-item-1',
@@ -758,7 +773,7 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
               },
             ]);
           }
-          if (sql.includes('UPDATE legacy_queue_items')) {
+          if (sql.includes('UPDATE queue_items')) {
             updateQueries.push({ sql, params });
             return Promise.resolve([]);
           }
@@ -798,13 +813,13 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
-          if (sql.includes('UPDATE facebook_pages')) {
+          if (sql.includes('UPDATE destinations')) {
             return Promise.resolve([{ id: pageId }]);
           }
-          if (sql.includes('SELECT count(*)::int as count FROM page_queue_slots')) {
+          if (sql.includes('SELECT count(*)::int as count FROM posting_slots')) {
             return Promise.resolve([{ count: 1 }]);
           }
-          if (sql.includes('FROM legacy_queue_items qi')) {
+          if (sql.includes('FROM queue_items qi')) {
             queriedQueueItemsSql = sql;
             return Promise.resolve([]);
           }
@@ -829,7 +844,7 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.realignedQueueCount).toBe(0);
-      expect(queriedQueueItemsSql).toContain('JOIN page_queue_slots s ON s.id = qi.slot_id');
+      expect(queriedQueueItemsSql).toContain('JOIN posting_slots s ON s.id = qi.slot_id');
     });
   });
 });

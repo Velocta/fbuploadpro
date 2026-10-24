@@ -6,10 +6,10 @@ import {
   readJsonBody,
   enforceIpRateLimit,
   DEFAULT_JSON_BODY_LIMIT_BYTES,
+  LARGE_JSON_BODY_LIMIT_BYTES,
 } from '../../src/lib/request-body';
 import { POST as uploadUrlPOST, handleCreateUploadUrl } from '../../src/app/api/tenant/[subdomain]/media/upload-url/route';
 import { POST as downloaderPOST } from '../../src/app/api/tenant/[subdomain]/downloader/route';
-import { handleBulkEnqueue } from '../../src/app/api/tenant/[subdomain]/publishing/queue/bulk/route';
 import { POST as publishNowPOST } from '../../src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/publish-now/route';
 import { POST as magicLinkPOST } from '../../src/app/api/tenant/[subdomain]/accounts/magic-link/route';
 import { POST as forgotPasswordPOST } from '../../src/app/api/auth/forgot-password/route';
@@ -164,30 +164,35 @@ describe('downloader route guard', () => {
   });
 });
 
-describe('bulk enqueue body cap', () => {
-  it('oversized bulk body (>1 MiB) is rejected with 413', async () => {
+describe('large-limit body cap (shared helper)', () => {
+  // This describe used to exercise the tenant bulk-enqueue route's
+  // 1 MiB body cap end-to-end. That route was deleted in the Phase 7
+  // drop (bulk creates go through the destination enqueue, one item
+  // per request), so the large-limit variant is now covered at the
+  // shared-helper level it was always delegated to.
+  it('oversized body (>1 MiB) is rejected as too-large at the large limit', async () => {
     const big = JSON.stringify({ pageId: 'p', items: [], pad: 'x'.repeat(1024 * 1024 + 100) });
-    const res = await handleBulkEnqueue(
-      req('http://localhost:3000/api/tenant/acme/publishing/queue/bulk', {
+    const result = await readJsonBody(
+      req('http://localhost:3000/api/tenant/acme/publishing/destination-queue', {
         body: big,
         ip: '10.4.0.1',
         cookie: sessionCookie,
       }),
-      'acme'
+      LARGE_JSON_BODY_LIMIT_BYTES
     );
-    expect(res.status).toBe(413);
+    expect(result).toEqual({ ok: false, reason: 'too-large' });
   });
 
-  it('malformed bulk body is rejected with 400 INVALID_REQUEST', async () => {
-    const res = await handleBulkEnqueue(
-      req('http://localhost:3000/api/tenant/acme/publishing/queue/bulk', {
+  it('malformed body is rejected as invalid-json at the large limit', async () => {
+    const result = await readJsonBody(
+      req('http://localhost:3000/api/tenant/acme/publishing/destination-queue', {
         body: 'not-json',
         ip: '10.4.0.2',
         cookie: sessionCookie,
       }),
-      'acme'
+      LARGE_JSON_BODY_LIMIT_BYTES
     );
-    expect(res.status).toBe(400);
+    expect(result).toEqual({ ok: false, reason: 'invalid-json' });
   });
 });
 

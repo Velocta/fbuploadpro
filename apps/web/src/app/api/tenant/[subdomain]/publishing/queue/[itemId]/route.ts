@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
   type DatabaseMediaItemRow,
-  type DatabaseQueueItemRow,
   canAccessTenant,
   getSessionSecret,
   QueueItemSchema,
@@ -11,7 +10,25 @@ import {
   type PostFormat,
 } from '@fbuploadpro/contracts';
 import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
+import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
+import {
+  unifiedQueueRowToPostFormat,
+  unifiedQueueStatusToWire,
+  wireFormatToUnifiedKind,
+  wireQueueStatusToUnified,
+} from '@/lib/server/facebook-wire';
 import type { SupabaseClient } from '@supabase/supabase-js';
+
+/**
+ * Queue item update/delete for the Facebook Page section, on the
+ * unified `queue_items` table (Phase 7). The wire shape is unchanged.
+ * Scoping is by workspace (resolved from the tenant subdomain): the
+ * unified tables are workspace-scoped, and the response's `userId`
+ * is the workspace owner — the identity the wire contract has always
+ * reported. Status translation lives in facebook-wire ('skipped'
+ * writes land as 'cancelled'; the unified vocabulary has no
+ * 'skipped').
+ */
 
 function resolveScheduledTime(
   requestedTime?: string | null,
@@ -40,34 +57,148 @@ type QueueMediaRecord = Pick<
   'name' | 'media_type' | 'url' | 'thumbnail_url' | 'aspect_ratio' | 'duration_seconds'
 >;
 
-export async function handleUpdateQueueItem(
+/** A unified queue_items row in the field names this handler uses. */
+interface UnifiedItemRow {
+  id: string;
+  destination_id: string;
+  slot_id: string | null;
+  media_item_id: string | null;
+  kind: string | null;
+  platform_format: string | null;
+  link_url: string | null;
+  scheduled_time: string;
+  caption: string | null;
+  first_comment: string | null;
+  status: string;
+  retry_count: number | string | null;
+  max_retries: number | string | null;
+  external_post_id: string | null;
+  external_comment_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+const UNIFIED_ITEM_COLUMNS =
+  'id, destination_id, slot_id, media_item_id, kind, platform_format, link_url, scheduled_time, caption, first_comment, status, retry_count, max_retries, external_post_id, external_comment_id, created_at, updated_at';
+
+const UNIFIED_ITEM_SQL_COLUMNS = `
+  id, destination_id, slot_id, media_item_id, kind, platform_format,
+  link_url, scheduled_time, caption, first_comment, status, retry_count,
+  max_retries, external_post_id, external_comment_id, created_at, updated_at`;
+
+async function authenticateQueueItemRequest(
   request: NextRequest,
-  subdomain: string,
-  itemId: string,
-  dbClient?: DatabaseClient | SupabaseClient
-): Promise<NextResponse> {
+  subdomain: string
+) {
   const sessionSecret = getSessionSecret();
 
-  // 1. Session auth guard
   const sessionCookie = request.cookies.get('fbup_session')?.value;
   if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return {
+      errorResponse: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
+    };
   }
 
   let session;
   try {
     session = await verifySessionToken(sessionCookie, sessionSecret);
   } catch (_e) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return {
+      errorResponse: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
+    };
   }
 
-  // 2. Tenant isolation check
   const access = canAccessTenant(session, subdomain);
   if (!access.allowed) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return {
+      errorResponse: NextResponse.json({ error: 'Forbidden' }, { status: 403 }),
+    };
   }
 
-  // 3. Request body validation
+  return { session };
+}
+
+async function fetchWorkspaceOwnerId(
+  client: DatabaseClient | SupabaseClient,
+  workspaceId: string
+): Promise<string | null> {
+  if ('query' in client && typeof (client as DatabaseClient).query === 'function') {
+    const rows = (await (client as DatabaseClient).query(
+      'SELECT owner_id FROM workspaces WHERE id = $1',
+      [workspaceId]
+    )) as Record<string, unknown>[];
+    const owner = rows?.[0]?.owner_id;
+    return typeof owner === 'string' ? owner : null;
+  }
+  const { data } = await (client as SupabaseClient)
+    .from('workspaces')
+    .select('owner_id')
+    .eq('id', workspaceId)
+    .maybeSingle();
+  return data?.owner_id ?? null;
+}
+
+function buildQueueItemResponse(
+  row: UnifiedItemRow,
+  userId: string,
+  mediaRecord: QueueMediaRecord | null,
+  formatOverride?: PostFormat
+) {
+  const queueItem = {
+    id: row.id,
+    userId,
+    pageId: row.destination_id,
+    slotId: row.slot_id ?? null,
+    mediaId: row.media_item_id ?? null,
+    postFormat:
+      formatOverride ??
+      unifiedQueueRowToPostFormat(row.kind, row.platform_format),
+    linkUrl: row.link_url ?? null,
+    scheduledTime: new Date(row.scheduled_time as string).toISOString(),
+    caption: row.caption ?? '',
+    firstComment: row.first_comment ?? null,
+    status: unifiedQueueStatusToWire(row.status),
+    retryCount: Number(row.retry_count ?? 0),
+    maxRetries: Number(row.max_retries ?? 3),
+    fbPostId: row.external_post_id ?? null,
+    fbCommentId: row.external_comment_id ?? null,
+    publishedAt:
+      row.status === 'published'
+        ? new Date(row.updated_at as string).toISOString()
+        : null,
+    createdAt: new Date(row.created_at as string).toISOString(),
+    updatedAt: new Date(row.updated_at as string).toISOString(),
+    ...(mediaRecord
+      ? {
+          media: {
+            name: mediaRecord.name,
+            mediaType: mediaRecord.media_type,
+            url: mediaRecord.url,
+            thumbnailUrl: mediaRecord.thumbnail_url ?? null,
+            aspectRatio: mediaRecord.aspect_ratio ?? 'unknown',
+            durationSeconds:
+              mediaRecord.duration_seconds != null
+                ? Number(mediaRecord.duration_seconds)
+                : null,
+          },
+        }
+      : {}),
+  };
+
+  return QueueItemSchema.parse(queueItem);
+}
+
+export async function handleUpdateQueueItem(
+  request: NextRequest,
+  subdomain: string,
+  itemId: string,
+  dbClient?: DatabaseClient | SupabaseClient
+): Promise<NextResponse> {
+  const auth = await authenticateQueueItemRequest(request, subdomain);
+  if (auth.errorResponse) return auth.errorResponse;
+  const session = auth.session!;
+
+  // Request body validation
   let rawBody: unknown;
   try {
     rawBody = await request.json();
@@ -86,14 +217,19 @@ export async function handleUpdateQueueItem(
     );
   }
 
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
+
   if (isLegacyClient(dbClient)) {
-    // 4. Check existing item
+    // Check existing item
     const existingRows = (await dbClient.query(
-      `SELECT qi.id, qi.user_id, qi.fb_page_id, qi.slot_id, qi.media_id, qi.post_format, qi.link_url, qi.scheduled_time, qi.caption, qi.first_comment, qi.status, qi.retry_count, qi.max_retries, qi.fb_post_id, qi.fb_comment_id, qi.published_at, qi.created_at, qi.updated_at
-       FROM legacy_queue_items qi
-       WHERE qi.id = $1 AND qi.user_id = $2`,
-      [itemId, session.userId]
-    )) as Record<string, unknown>[];
+      `SELECT ${UNIFIED_ITEM_SQL_COLUMNS}
+       FROM queue_items
+       WHERE id = $1 AND workspace_id = $2`,
+      [itemId, workspaceId]
+    )) as unknown as UnifiedItemRow[];
 
     if (!existingRows || existingRows.length === 0) {
       return NextResponse.json({ error: 'Queue item not found' }, { status: 404 });
@@ -108,9 +244,12 @@ export async function handleUpdateQueueItem(
       );
     }
 
-    // 5. Compute updated values
+    const ownerId = (await fetchWorkspaceOwnerId(dbClient, workspaceId)) ?? session.userId;
+
+    // Compute updated values
+    const existingFormat = unifiedQueueRowToPostFormat(existing.kind, existing.platform_format);
     const newCaption = parsed.data.caption ?? existing.caption ?? '';
-    const newPostFormat = (parsed.data.postFormat ?? existing.post_format ?? (existing.media_id ? undefined : 'text')) as PostFormat | undefined;
+    const newPostFormat = (parsed.data.postFormat ?? existingFormat) as PostFormat;
     let newFirstComment = parsed.data.firstComment !== undefined ? parsed.data.firstComment : (existing.first_comment ?? null);
     if (newPostFormat === 'story') {
       if (parsed.data.firstComment && parsed.data.firstComment.trim().length > 0) {
@@ -124,78 +263,63 @@ export async function handleUpdateQueueItem(
     const newLinkUrl = parsed.data.linkUrl !== undefined ? parsed.data.linkUrl : (existing.link_url ?? null);
     let newScheduledTime: string;
     try {
-      newScheduledTime = resolveScheduledTime(parsed.data.scheduledTime, existing.scheduled_time as string | null | undefined);
+      newScheduledTime = resolveScheduledTime(parsed.data.scheduledTime, existing.scheduled_time);
     } catch (_e) {
       return NextResponse.json(
         { error: 'INVALID_REQUEST', message: 'Invalid scheduled time format' },
         { status: 400 }
       );
     }
-    const newStatus = parsed.data.status ?? existing.status;
+    const newStatus = parsed.data.status
+      ? wireQueueStatusToUnified(parsed.data.status)
+      : existing.status;
+
+    // A format change rewrites kind + platform_format together (the
+    // composer's enqueue mapping); without one, both stay as stored.
+    const formatWrite = parsed.data.postFormat
+      ? wireFormatToUnifiedKind(parsed.data.postFormat)
+      : null;
 
     const updateRows = (await dbClient.query(
-      `UPDATE legacy_queue_items
+      `UPDATE queue_items
        SET caption = $1,
            first_comment = $2,
            scheduled_time = $3,
            status = $4,
-           post_format = COALESCE($5, post_format),
-           link_url = $6,
+           kind = COALESCE($5, kind),
+           platform_format = CASE WHEN $5 IS NOT NULL THEN $6 ELSE platform_format END,
+           link_url = $7,
            updated_at = now()
-       WHERE id = $7 AND user_id = $8
-       RETURNING id, user_id, fb_page_id, slot_id, media_id, post_format, link_url, scheduled_time, caption, first_comment, status, retry_count, max_retries, fb_post_id, fb_comment_id, published_at, created_at, updated_at`,
-      [newCaption, newFirstComment, newScheduledTime, newStatus, newPostFormat ?? null, newLinkUrl, itemId, session.userId]
-    )) as Record<string, unknown>[];
+       WHERE id = $8 AND workspace_id = $9
+       RETURNING ${UNIFIED_ITEM_SQL_COLUMNS}`,
+      [
+        newCaption,
+        newFirstComment,
+        newScheduledTime,
+        newStatus,
+        formatWrite?.kind ?? null,
+        formatWrite?.platformFormat ?? null,
+        newLinkUrl,
+        itemId,
+        workspaceId,
+      ]
+    )) as unknown as UnifiedItemRow[];
 
     const updated = updateRows[0];
 
-    // 6. Fetch joined media details if present
+    // Fetch joined media details if present
     let mediaRecord: QueueMediaRecord | null = null;
-    if (updated.media_id) {
+    if (updated.media_item_id) {
       const mediaRows = await dbClient.query<QueueMediaRecord>(
         `SELECT id, name, media_type, url, thumbnail_url, aspect_ratio, duration_seconds
          FROM media_items
-         WHERE id = $1 AND user_id = $2`,
-        [updated.media_id, session.userId]
+         WHERE id = $1 AND workspace_id = $2`,
+        [updated.media_item_id, workspaceId]
       );
       mediaRecord = mediaRows?.[0] ?? null;
     }
 
-    const queueItem = {
-      id: updated.id,
-      userId: updated.user_id,
-      pageId: updated.fb_page_id,
-      slotId: updated.slot_id ?? null,
-      mediaId: updated.media_id ?? null,
-      postFormat: (updated.post_format as PostFormat) ?? newPostFormat ?? (mediaRecord?.media_type === 'video' ? 'video' : 'image'),
-      linkUrl: updated.link_url ?? newLinkUrl ?? null,
-      scheduledTime: new Date(updated.scheduled_time as string).toISOString(),
-      caption: updated.caption ?? '',
-      firstComment: updated.first_comment ?? null,
-      status: updated.status,
-      retryCount: Number(updated.retry_count ?? 0),
-      maxRetries: Number(updated.max_retries ?? 3),
-      fbPostId: updated.fb_post_id ?? null,
-      fbCommentId: updated.fb_comment_id ?? null,
-      publishedAt: updated.published_at ? new Date(updated.published_at as string).toISOString() : null,
-      createdAt: new Date(updated.created_at as string).toISOString(),
-      updatedAt: new Date(updated.updated_at as string).toISOString(),
-      ...(mediaRecord
-        ? {
-            media: {
-              name: mediaRecord.name,
-              mediaType: mediaRecord.media_type,
-              url: mediaRecord.url,
-              thumbnailUrl: mediaRecord.thumbnail_url ?? null,
-              aspectRatio: mediaRecord.aspect_ratio ?? 'unknown',
-              durationSeconds:
-                mediaRecord.duration_seconds != null ? Number(mediaRecord.duration_seconds) : null,
-            },
-          }
-        : {}),
-    };
-
-    const validated = QueueItemSchema.parse(queueItem);
+    const validated = buildQueueItemResponse(updated, ownerId, mediaRecord, newPostFormat);
     return NextResponse.json(validated, { status: 200 });
   }
 
@@ -205,10 +329,10 @@ export async function handleUpdateQueueItem(
   }
 
   const { data: existing, error: existErr } = await supabase
-    .from('legacy_queue_items')
-    .select('*')
+    .from('queue_items')
+    .select(UNIFIED_ITEM_COLUMNS)
     .eq('id', itemId)
-    .eq('user_id', session.userId)
+    .eq('workspace_id', workspaceId)
     .maybeSingle();
 
   if (existErr || !existing) {
@@ -222,8 +346,11 @@ export async function handleUpdateQueueItem(
     );
   }
 
+  const ownerId = (await fetchWorkspaceOwnerId(supabase, workspaceId)) ?? session.userId;
+
+  const existingFormat = unifiedQueueRowToPostFormat(existing.kind, existing.platform_format);
   const newCaption = parsed.data.caption ?? existing.caption ?? '';
-  const newPostFormat = (parsed.data.postFormat ?? existing.post_format ?? (existing.media_id ? undefined : 'text')) as PostFormat | undefined;
+  const newPostFormat = (parsed.data.postFormat ?? existingFormat) as PostFormat;
   let newFirstComment = parsed.data.firstComment !== undefined ? parsed.data.firstComment : (existing.first_comment ?? null);
   if (newPostFormat === 'story') {
     if (parsed.data.firstComment && parsed.data.firstComment.trim().length > 0) {
@@ -237,18 +364,26 @@ export async function handleUpdateQueueItem(
   const newLinkUrl = parsed.data.linkUrl !== undefined ? parsed.data.linkUrl : (existing.link_url ?? null);
   let newScheduledTime: string;
   try {
-    newScheduledTime = resolveScheduledTime(parsed.data.scheduledTime, existing.scheduled_time as string | null | undefined);
+    newScheduledTime = resolveScheduledTime(parsed.data.scheduledTime, existing.scheduled_time);
   } catch (_e) {
     return NextResponse.json(
       { error: 'INVALID_REQUEST', message: 'Invalid scheduled time format' },
       { status: 400 }
     );
   }
-  const newStatus = parsed.data.status ?? existing.status;
+  const newStatus = parsed.data.status
+    ? wireQueueStatusToUnified(parsed.data.status)
+    : existing.status;
 
-  const updatePayload: Partial<DatabaseQueueItemRow> & {
-    post_format?: PostFormat | null;
-    link_url?: string | null;
+  const updatePayload: {
+    caption: string;
+    first_comment: string | null;
+    scheduled_time: string;
+    status: string;
+    link_url: string | null;
+    kind?: string;
+    platform_format?: string | null;
+    updated_at: string;
   } = {
     caption: newCaption,
     first_comment: newFirstComment,
@@ -257,16 +392,18 @@ export async function handleUpdateQueueItem(
     link_url: newLinkUrl,
     updated_at: new Date().toISOString(),
   };
-  if (newPostFormat) {
-    updatePayload.post_format = newPostFormat;
+  if (parsed.data.postFormat) {
+    const formatWrite = wireFormatToUnifiedKind(parsed.data.postFormat);
+    updatePayload.kind = formatWrite.kind;
+    updatePayload.platform_format = formatWrite.platformFormat;
   }
 
   const { data: updated, error: updateErr } = await supabase
-    .from('legacy_queue_items')
+    .from('queue_items')
     .update(updatePayload)
     .eq('id', itemId)
-    .eq('user_id', session.userId)
-    .select()
+    .eq('workspace_id', workspaceId)
+    .select(UNIFIED_ITEM_COLUMNS)
     .single();
 
   if (updateErr || !updated) {
@@ -274,51 +411,22 @@ export async function handleUpdateQueueItem(
   }
 
   let mediaRecord: QueueMediaRecord | null = null;
-  if (updated.media_id) {
+  if (updated.media_item_id) {
     const { data: mediaData } = await supabase
       .from('media_items')
       .select('id, name, media_type, url, thumbnail_url, aspect_ratio, duration_seconds')
-      .eq('id', updated.media_id)
-      .eq('user_id', session.userId)
+      .eq('id', updated.media_item_id)
+      .eq('workspace_id', workspaceId)
       .maybeSingle();
     mediaRecord = mediaData;
   }
 
-  const queueItem = {
-    id: updated.id,
-    userId: updated.user_id,
-    pageId: updated.fb_page_id,
-    slotId: updated.slot_id ?? null,
-    mediaId: updated.media_id ?? null,
-    postFormat: (updated.post_format as PostFormat) ?? newPostFormat ?? (mediaRecord?.media_type === 'video' ? 'video' : 'image'),
-    linkUrl: updated.link_url ?? newLinkUrl ?? null,
-    scheduledTime: new Date(updated.scheduled_time as string).toISOString(),
-    caption: updated.caption ?? '',
-    firstComment: updated.first_comment ?? null,
-    status: updated.status,
-    retryCount: Number(updated.retry_count ?? 0),
-    maxRetries: Number(updated.max_retries ?? 3),
-    fbPostId: updated.fb_post_id ?? null,
-    fbCommentId: updated.fb_comment_id ?? null,
-    publishedAt: updated.published_at ? new Date(updated.published_at as string).toISOString() : null,
-    createdAt: new Date(updated.created_at as string).toISOString(),
-    updatedAt: new Date(updated.updated_at as string).toISOString(),
-    ...(mediaRecord
-      ? {
-          media: {
-            name: mediaRecord.name,
-            mediaType: mediaRecord.media_type,
-            url: mediaRecord.url,
-            thumbnailUrl: mediaRecord.thumbnail_url ?? null,
-            aspectRatio: mediaRecord.aspect_ratio ?? 'unknown',
-            durationSeconds:
-              mediaRecord.duration_seconds != null ? Number(mediaRecord.duration_seconds) : null,
-          },
-        }
-      : {}),
-  };
-
-  const validated = QueueItemSchema.parse(queueItem);
+  const validated = buildQueueItemResponse(
+    updated as UnifiedItemRow,
+    ownerId,
+    mediaRecord,
+    newPostFormat
+  );
   return NextResponse.json(validated, { status: 200 });
 }
 
@@ -328,32 +436,20 @@ export async function handleDeleteQueueItem(
   itemId: string,
   dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
-  const sessionSecret = getSessionSecret();
+  const auth = await authenticateQueueItemRequest(request, subdomain);
+  if (auth.errorResponse) return auth.errorResponse;
+  const session = auth.session!;
 
-  // 1. Session auth guard
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  // 2. Tenant isolation check
-  const access = canAccessTenant(session, subdomain);
-  if (!access.allowed) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }
 
   if (isLegacyClient(dbClient)) {
-    // 3. Check existing item
+    // Check existing item
     const existingRows = (await dbClient.query(
-      `SELECT id, user_id, status FROM legacy_queue_items WHERE id = $1 AND user_id = $2`,
-      [itemId, session.userId]
+      `SELECT id, status FROM queue_items WHERE id = $1 AND workspace_id = $2`,
+      [itemId, workspaceId]
     )) as Record<string, unknown>[];
 
     if (!existingRows || existingRows.length === 0) {
@@ -368,10 +464,10 @@ export async function handleDeleteQueueItem(
       );
     }
 
-    // 4. Delete item
+    // Delete item
     await dbClient.query(
-      `DELETE FROM legacy_queue_items WHERE id = $1 AND user_id = $2`,
-      [itemId, session.userId]
+      `DELETE FROM queue_items WHERE id = $1 AND workspace_id = $2`,
+      [itemId, workspaceId]
     );
 
     return NextResponse.json({ success: true, itemId }, { status: 200 });
@@ -383,10 +479,10 @@ export async function handleDeleteQueueItem(
   }
 
   const { data: existing, error: existErr } = await supabase
-    .from('legacy_queue_items')
-    .select('id, user_id, status')
+    .from('queue_items')
+    .select('id, status')
     .eq('id', itemId)
-    .eq('user_id', session.userId)
+    .eq('workspace_id', workspaceId)
     .maybeSingle();
 
   if (existErr || !existing) {
@@ -401,10 +497,10 @@ export async function handleDeleteQueueItem(
   }
 
   const { error: deleteErr } = await supabase
-    .from('legacy_queue_items')
+    .from('queue_items')
     .delete()
     .eq('id', itemId)
-    .eq('user_id', session.userId);
+    .eq('workspace_id', workspaceId);
 
   if (deleteErr) {
     return NextResponse.json({ error: 'Failed to delete queue item' }, { status: 500 });

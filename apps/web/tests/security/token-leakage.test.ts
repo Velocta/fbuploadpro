@@ -58,29 +58,29 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
             }),
           };
         }
-        if (table === 'facebook_accounts') {
+        if (table === 'social_accounts') {
           const builder: any = {
             order: vi.fn().mockResolvedValue({
               data: [
                 {
                   id: accountId,
-                  fb_account_id: 'fb_123',
+                  external_account_id: 'fb_123',
                   display_name: 'Marketing Lead',
-                  profile_picture_url: null,
-                  gender: null,
-                  account_link: null,
+                  avatar_url: null,
+                  metadata: {},
                   status: 'active',
                   token_expires_at: new Date(Date.now() + 86400000).toISOString(),
                   encrypted_access_token: sampleCiphertext,
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
-                  facebook_pages: [
+                  destinations: [
                     {
                       id: pageId,
-                      page_name: 'Brand Main Page',
-                      profile_picture_url: null,
+                      name: 'Brand Main Page',
+                      avatar_url: null,
                       status: 'active',
                       workspace_id: 'ws_123',
+                      metadata: {},
                     },
                   ],
                 },
@@ -129,26 +129,28 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
             }),
           };
         }
-        if (table === 'facebook_pages') {
+        if (table === 'destinations') {
           const builder: any = {
             order: vi.fn().mockResolvedValue({
               data: [
                 {
                   id: pageId,
-                  facebook_account_id: accountId,
-                  user_id: userId,
+                  account_id: accountId,
                   workspace_id: 'ws_123',
-                  fb_page_id: 'page_987',
-                  page_name: 'Brand Main Page',
-                  category: 'Retail',
-                  starting_followers: 50000,
-                  current_followers: 50000,
+                  external_destination_id: 'page_987',
+                  name: 'Brand Main Page',
+                  avatar_url: null,
                   status: 'active',
-                  tasks: ['CREATE_CONTENT'],
-                  encrypted_access_token: sampleCiphertext,
+                  metadata: {
+                    category: 'Retail',
+                    starting_followers: 50000,
+                    current_followers: 50000,
+                    tasks: ['CREATE_CONTENT'],
+                  },
+                  encrypted_destination_token: sampleCiphertext,
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
-                  facebook_accounts: {
+                  social_accounts: {
                     display_name: 'Marketing Lead',
                   },
                 },
@@ -197,13 +199,12 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
             }),
           };
         }
-        if (table === 'facebook_accounts') {
+        if (table === 'social_accounts') {
           const builder: any = {
             maybeSingle: vi.fn().mockResolvedValue({
               data: {
                 id: accountId,
-                user_id: userId,
-                fb_account_id: 'fb_123',
+                external_account_id: 'fb_123',
                 display_name: 'Marketing Lead',
                 encrypted_access_token: sampleCiphertext,
                 status: 'active',
@@ -216,12 +217,10 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
             select: vi.fn().mockReturnValue(builder),
           };
         }
-        if (table === 'facebook_pages') {
+        if (table === 'destinations') {
           const builder: any = {
-            neq: vi.fn().mockResolvedValue({
-              data: [],
-              error: null,
-            }),
+            then: (resolve: (val: any) => void) =>
+              Promise.resolve({ data: [], error: null }).then(resolve),
           };
           builder.eq = vi.fn(() => builder);
           return {
@@ -281,13 +280,12 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
             }),
           };
         }
-        if (table === 'facebook_accounts') {
+        if (table === 'social_accounts') {
           const builder: any = {
             maybeSingle: vi.fn().mockResolvedValue({
               data: {
                 id: accountId,
-                user_id: userId,
-                fb_account_id: 'fb_123',
+                external_account_id: 'fb_123',
                 display_name: 'Marketing Lead',
                 encrypted_access_token: sampleCiphertext,
                 status: 'active',
@@ -300,7 +298,7 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
             select: vi.fn().mockReturnValue(builder),
           };
         }
-        if (table === 'facebook_pages') {
+        if (table === 'destinations') {
           const builder: any = {
             in: vi.fn().mockResolvedValue({
               data: [],
@@ -315,8 +313,8 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
                 single: vi.fn().mockResolvedValue({
                   data: {
                     id: pageId,
-                    fb_page_id: 'page_12345',
-                    page_name: 'Enterprise Page',
+                    external_destination_id: 'page_12345',
+                    name: 'Enterprise Page',
                   },
                   error: null,
                 }),

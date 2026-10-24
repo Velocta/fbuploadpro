@@ -115,7 +115,7 @@ describe('C1 — downloader GET no longer leaks the raw error message', () => {
 });
 
 describe('B19 — queue list counters: failure still serves zero counts, but logs', () => {
-  it('logs when the legacy status-count query fails', async () => {
+  it('logs when the unified status-count query fails', async () => {
     const mockDb: Partial<DatabaseClient> = {
       query: vi.fn().mockImplementation((sql: string) => {
         if (sql.includes('FROM workspaces')) return Promise.resolve([{ id: 'ws_123' }]);

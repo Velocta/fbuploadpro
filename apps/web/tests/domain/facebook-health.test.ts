@@ -195,7 +195,7 @@ describe('Facebook Multi-Account Health Monitoring & Expiration (User Story 3 - 
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
-          if (sql.includes('FROM facebook_accounts')) {
+          if (sql.includes('FROM social_accounts')) {
             return Promise.resolve([
               {
                 id: '22222222-2222-4222-a222-222222222222',
@@ -278,11 +278,11 @@ describe('Facebook Multi-Account Health Monitoring & Expiration (User Story 3 - 
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
-          if (sql.includes('UPDATE facebook_accounts') && sql.includes("status = 'expired'")) {
+          if (sql.includes('UPDATE social_accounts') && sql.includes("status = 'expired'")) {
             accountUpdateExecuted = true;
             return Promise.resolve([]);
           }
-          if (sql.includes('FROM facebook_accounts')) {
+          if (sql.includes('FROM social_accounts')) {
             return Promise.resolve([
               {
                 id: '44444444-4444-4444-a444-444444444444',
@@ -332,19 +332,21 @@ describe('Facebook Multi-Account Health Monitoring & Expiration (User Story 3 - 
               }),
             };
           }
-          if (table === 'facebook_accounts') {
+          if (table === 'social_accounts') {
             const builder: any = {
               order: vi.fn().mockResolvedValue({
                 data: [
                   {
                     id: '55555555-5555-5555-a555-555555555555',
-                    fb_account_id: 'fb_act_sb_expired',
+                    external_account_id: 'fb_act_sb_expired',
                     display_name: 'SB Expired Account',
+                    avatar_url: null,
+                    metadata: {},
                     status: 'active',
                     token_expires_at: pastDate,
                     created_at: pastDate,
                     updated_at: pastDate,
-                    facebook_pages: [],
+                    destinations: [],
                   },
                 ],
                 error: null,

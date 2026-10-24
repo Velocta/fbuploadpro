@@ -23,9 +23,6 @@ function createMockDb(options: {
   dueCount?: number;
   stuckCount?: number;
   oldestScheduledTime?: string | null;
-  legacyDueCount?: number;
-  legacyStuckCount?: number;
-  legacyOldestScheduledTime?: string | null;
   pageCounts?: Record<string, number>;
   accountCounts?: Record<string, number>;
 }) {
@@ -43,19 +40,10 @@ function createMockDb(options: {
           error: null,
         };
       }
-      if (table === 'legacy_queue_items') {
-        return {
-          count:
-            filters.status === 'publishing'
-              ? (options.legacyStuckCount ?? 0)
-              : (options.legacyDueCount ?? 0),
-          error: null,
-        };
-      }
-      if (table === 'facebook_pages') {
+      if (table === 'destinations') {
         return { count: options.pageCounts?.[String(filters.status)] ?? 0, error: null };
       }
-      if (table === 'facebook_accounts') {
+      if (table === 'social_accounts') {
         return { count: options.accountCounts?.[String(filters.status)] ?? 0, error: null };
       }
       return { count: 0, error: null };
@@ -83,14 +71,6 @@ function createMockDb(options: {
         return {
           data: options.oldestScheduledTime
             ? { scheduled_time: options.oldestScheduledTime }
-            : null,
-          error: null,
-        };
-      }
-      if (table === 'legacy_queue_items') {
-        return {
-          data: options.legacyOldestScheduledTime
-            ? { scheduled_time: options.legacyOldestScheduledTime }
             : null,
           error: null,
         };
@@ -130,7 +110,7 @@ describe('Internal Health Probe (/api/internal/health)', () => {
   it('returns ok when heartbeat is fresh, storage is up, and queue is clear', async () => {
     const db = createMockDb({
       heartbeat: freshHeartbeat,
-      pageCounts: { active: 10, paused: 2 },
+      pageCounts: { active: 10, rate_limited: 2 },
       accountCounts: { active: 4 },
     });
     const res = await probeInternalHealth({
@@ -221,15 +201,14 @@ describe('Internal Health Probe (/api/internal/health)', () => {
     expect(res.payload.checks.queue.oldestDueAgeSeconds).toBe(300);
   });
 
-  it('reads primary queue counts from the unified queue_items table and legacy counts as a separate field', async () => {
+  it('reads queue counts from the unified queue_items table only (Phase 7: no legacy field)', async () => {
     const db = createMockDb({
       heartbeat: freshHeartbeat,
       dueCount: 7,
       stuckCount: 0,
       oldestScheduledTime: '2026-10-22T11:50:00.000Z',
-      legacyDueCount: 3,
-      legacyStuckCount: 0,
-      legacyOldestScheduledTime: '2026-10-22T11:58:00.000Z',
+      pageCounts: { active: 3 },
+      accountCounts: { active: 1 },
     });
     const res = await probeInternalHealth({
       db,
@@ -237,31 +216,24 @@ describe('Internal Health Probe (/api/internal/health)', () => {
       now: NOW,
     });
     expect(res.payload.status).toBe('ok');
-    // Primary = unified queue_items
     expect(res.payload.checks.queue.dueCount).toBe(7);
     expect(res.payload.checks.queue.oldestDueAgeSeconds).toBe(600);
     expect(res.payload.checks.queue.stuckPublishingCount).toBe(0);
-    // Legacy kept, additive
-    expect(res.payload.checks.queue.legacy.dueCount).toBe(3);
-    expect(res.payload.checks.queue.legacy.oldestDueAgeSeconds).toBe(120);
-    expect(res.payload.checks.queue.legacy.stuckPublishingCount).toBe(0);
-  });
-
-  it('returns degraded when only legacy items are stuck in publishing', async () => {
-    const db = createMockDb({
-      heartbeat: freshHeartbeat,
-      stuckCount: 0,
-      legacyStuckCount: 1,
-    });
-    const res = await probeInternalHealth({
-      db,
-      checkStorage: async () => true,
-      now: NOW,
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.payload.status).toBe('degraded');
-    expect(res.payload.checks.queue.stuckPublishingCount).toBe(0);
-    expect(res.payload.checks.queue.legacy.stuckPublishingCount).toBe(1);
+    expect('legacy' in res.payload.checks.queue).toBe(false);
+    // The probe never touches a dropped table, and the Facebook
+    // aggregates come from the unified tables scoped to facebook.
+    const touchedTables = new Set(db.__queries.map((q) => q.table));
+    expect(touchedTables).not.toContain('legacy_queue_items');
+    expect(touchedTables).not.toContain('facebook_pages');
+    expect(touchedTables).not.toContain('facebook_accounts');
+    const destinationQueries = queriesFor(db, 'destinations');
+    expect(destinationQueries.length).toBeGreaterThan(0);
+    expect(destinationQueries.every((q) => q.filters.platform === 'facebook')).toBe(true);
+    const accountQueries = queriesFor(db, 'social_accounts');
+    expect(accountQueries.length).toBeGreaterThan(0);
+    expect(accountQueries.every((q) => q.filters.platform === 'facebook')).toBe(true);
+    expect(res.payload.checks.facebook.pagesByStatus.active).toBe(3);
+    expect(res.payload.checks.facebook.accountsByStatus.active).toBe(1);
   });
 
   it('queries the unified queue with claim semantics: queued + scheduled_time due', async () => {
@@ -293,23 +265,14 @@ describe('Internal Health Probe (/api/internal/health)', () => {
     expect(stuck?.or).toBe(
       `claimed_at.lte.${stuckBefore},and(claimed_at.is.null,updated_at.lte.${stuckBefore})`
     );
-    // Legacy stuck keeps the legacy recovery predicate: updated_at only
-    const legacy = queriesFor(db, 'legacy_queue_items');
-    const legacyStuck = legacy.find((q) => q.filters.status === 'publishing');
-    expect(legacyStuck).toBeDefined();
-    expect(legacyStuck?.or).toBeNull();
-    expect(legacyStuck?.lte.updated_at).toBe(stuckBefore);
   });
 
-  it('reports a stalled unified queue even when the legacy queue is clear', async () => {
+  it('reports a stalled unified queue as degraded with the oldest due age', async () => {
     const db = createMockDb({
       heartbeat: freshHeartbeat,
       dueCount: 42,
       stuckCount: 3,
       oldestScheduledTime: '2026-10-22T10:00:00.000Z',
-      legacyDueCount: 0,
-      legacyStuckCount: 0,
-      legacyOldestScheduledTime: null,
     });
     const res = await probeInternalHealth({
       db,
@@ -319,8 +282,6 @@ describe('Internal Health Probe (/api/internal/health)', () => {
     expect(res.payload.status).toBe('degraded');
     expect(res.payload.checks.queue.dueCount).toBe(42);
     expect(res.payload.checks.queue.oldestDueAgeSeconds).toBe(7200);
-    expect(res.payload.checks.queue.legacy.dueCount).toBe(0);
-    expect(res.payload.checks.queue.legacy.oldestDueAgeSeconds).toBeNull();
   });
 
   it('flips to unhealthy when storage is down', async () => {
