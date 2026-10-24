@@ -3,7 +3,7 @@
  *
  * The composer's queue intent reads the destination's posting slots
  * from the destination posting-slots endpoint (the enabling backend,
- * #756) — the unified `posting_slots` rows, never the legacy per-page
+ * PR 756) — the unified `posting_slots` rows, never the legacy per-page
  * slots. Occurrence maths reuses the shared slot helpers: a destination
  * slot maps onto the `PageSlotSummary` shape with its `kind` list as
  * the covered formats (an empty list covers every kind, matching the

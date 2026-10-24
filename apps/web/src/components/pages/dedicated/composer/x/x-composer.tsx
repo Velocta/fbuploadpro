@@ -101,7 +101,7 @@ export function XComposer({ subdomain, destination, onSubmitted }: Readonly<XCom
   const fieldErrors = form.formState.errors;
   const isSubmitting = form.formState.isSubmitting;
 
-  // The destination's unified posting slots (enabling backend #756) —
+  // The destination's unified posting slots (enabling backend, PR 756) —
   // reference data, 60s stale per spec 132 §7. Queue availability,
   // the schedule default and every "goes out" line derive from it.
   const slotsQuery = useQuery({

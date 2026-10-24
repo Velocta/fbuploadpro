@@ -20,7 +20,7 @@
  * T-G0 host: it carries the destination's identity (id + platform) as
  * data attributes so the platform composer sets mount into it without a
  * frame change. The X composer (spec 132 §4.5) mounts here on the
- * enabling backend (#750/#756: destination enqueue + posting-slots
+ * enabling backend (PRs 750/756: destination enqueue + posting-slots
  * read); the remaining platforms' composers mount the same way as
  * their sets land.
  *

@@ -10,7 +10,6 @@ export {
   type PostComposerProps,
   type ComposerInitialPost,
 } from './composer/post-composer';
-export { XComposer, type XComposerProps } from './composer/x/x-composer';
 export { IntentSelector, type IntentSelectorProps, type ComposerIntent } from './composer/intent-selector';
 export { FormatSelector, type FormatSelectorProps } from './composer/format-selector';
 export {

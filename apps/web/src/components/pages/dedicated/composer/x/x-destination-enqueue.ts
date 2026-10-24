@@ -1,5 +1,5 @@
 /**
- * X enqueue request assembly (spec 132 §4.5; enabling backend #750).
+ * X enqueue request assembly (spec 132 §4.5; enabling backend PR 750).
  *
  * The X slice of the contracts `DestinationEnqueueRequestSchema`
  * discriminated union, spelled out field-for-field like the Facebook
