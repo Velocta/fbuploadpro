@@ -5,7 +5,8 @@ import SignupPage from '../../src/app/signup/page';
 import LoginPage from '../../src/app/login/page';
 import ForgotPasswordPage from '../../src/app/forgot-password/page';
 import ResetPasswordPage from '../../src/app/reset-password/page';
-import { Input } from '../../src/components/ui';
+import { Input } from '../../src/components/shared/ui/input';
+import { Field } from '../../src/components/shared/ui/form';
 import { PasswordInput } from '../../src/components/auth/password-input';
 
 vi.mock('next/navigation', () => ({
@@ -66,17 +67,28 @@ describe('Auth Inline Error Highlighting & Edge Cases (Spec 016)', () => {
   });
 
   describe('Input and PasswordInput Error States', () => {
-    it('Input renders aria-invalid, has-error class, and inline role="alert" message when error prop is provided', () => {
+    it('Input renders aria-invalid and inline role="alert" message when error is provided via Field', () => {
+      // Spec 136 PR-136E: the legacy Input (label/error props of its own)
+      // is deleted with components/ui; the shared pattern is the form
+      // standard's `Field` wrapper around the shared/ui Input — it wires
+      // aria-invalid + the token-coloured inline message, exactly as the
+      // rebuilt PasswordInput below does. The legacy `has-error` class /
+      // hex assertions belonged to the legacy Input it replaced.
       const { html, hasText, hasAttribute } = render(
-        <Input label="Phone Number" error="Please enter a complete, valid international phone number." />
+        <Field
+          id="phone-number"
+          label="Phone Number"
+          error="Please enter a complete, valid international phone number."
+        >
+          <Input />
+        </Field>
       );
 
       expect(hasText('Phone Number')).toBe(true);
       expect(hasText('Please enter a complete, valid international phone number.')).toBe(true);
       expect(hasAttribute('aria-invalid', 'true')).toBe(true);
-      expect(html).toContain('has-error');
       expect(html).toContain('role="alert"');
-      expect(html.toLowerCase()).toContain('#f6465d');
+      expect(html).toContain('text-brand-rose');
     });
 
     it('PasswordInput renders aria-invalid and an inline role="alert" message when error prop is provided', () => {

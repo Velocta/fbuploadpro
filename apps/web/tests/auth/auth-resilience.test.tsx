@@ -8,7 +8,7 @@ import { POST as resetPasswordHandler } from '../../src/app/api/auth/reset-passw
 import { sanitizeAuthErrorMessage } from '../../src/lib/auth-errors';
 import { _setMockSupabaseClient } from '../../src/lib/auth/clients';
 import { render } from '../components/setup';
-import { Alert } from '../../src/components/ui';
+import { Alert, AlertDescription, AlertTitle } from '../../src/components/shared/ui/alert';
 
 describe('Auth Security Leak Prevention & Fault-Tolerant Resilience (Spec 012 / T007)', () => {
   const failingSupabaseMock = {
@@ -159,12 +159,18 @@ describe('Auth Security Leak Prevention & Fault-Tolerant Resilience (Spec 012 / 
       const leaked = 'connect ECONNREFUSED 127.0.0.1:5432';
       const cleanMessage = sanitizeAuthErrorMessage(leaked);
 
+      // Spec 136 PR-136E: the legacy Alert (severity/title/message props)
+      // is deleted with components/ui; the shared/ui Alert carries the
+      // same content via its destructive variant + AlertTitle /
+      // AlertDescription. What this test verifies — sanitized copy
+      // rendering with zero leaked plumbing — is unchanged.
       const { hasText, html } = render(
-        <Alert
-          severity="error"
-          title="Couldn't sign you in"
-          message={cleanMessage}
-        />
+        <Alert variant="destructive">
+          <div>
+            <AlertTitle>Couldn&apos;t sign you in</AlertTitle>
+            <AlertDescription>{cleanMessage}</AlertDescription>
+          </div>
+        </Alert>
       );
 
       expect(html.toLowerCase()).toContain('sign you in');

@@ -5,7 +5,7 @@ import LoginPage from '../../src/app/login/page';
 import SignupPage from '../../src/app/signup/page';
 import ForgotPasswordPage from '../../src/app/forgot-password/page';
 import ResetPasswordPage from '../../src/app/reset-password/page';
-import { Input } from '../../src/components/ui/input';
+import { PasswordInput } from '../../src/components/auth/password-input';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -63,10 +63,15 @@ describe('WCAG 2.2 AA Accessibility & Usability (AUTH-08 to AUTH-15 / Spec 017 U
     });
   });
 
-  describe('Password Toggle Focus Styling (AUTH-15)', () => {
-    it('renders toggle button with fbu-password-toggle class and focus-visible styling', () => {
-      const { hasClass } = render(<Input isPassword={true} label="Secret" />);
-      expect(hasClass('fbu-password-toggle')).toBe(true);
+  describe('Password Toggle (AUTH-15)', () => {
+    it('renders toggle button with accessible Show password label', () => {
+      // Spec 136 PR-136E: the legacy Input's isPassword toggle (and its
+      // fbu-password-toggle class hook) is deleted with components/ui;
+      // the password toggle now lives in the shared PasswordInput, whose
+      // toggle is identified by its accessible "Show password" label —
+      // the same assertion the migrated PasswordInput suite uses.
+      const { html } = render(<PasswordInput label="Secret" />);
+      expect(html).toContain('aria-label="Show password"');
     });
   });
 });
