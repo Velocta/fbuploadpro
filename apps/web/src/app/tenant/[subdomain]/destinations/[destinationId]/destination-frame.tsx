@@ -20,12 +20,13 @@
  * route's first-load budget cannot carry statically). The composer
  * slot is spec 132's T-G0 host: it carries the destination's
  * identity (id + platform) as data attributes so the platform
- * composer sets mount into it without a frame change. The X composer
- * (spec 132 §4.5) and the Instagram composer (PR-C3) mount here on
- * the enabling backend; the remaining platforms' composers mount the
- * same way as their sets land, and until then the slot renders its
- * owner's own not-yet-available state (spec §4.2.1(c)) — never a
- * 131-invented substitute, never a fake control.
+ * composer sets mount into it without a frame change. The platform
+ * composer sets (spec 132: X §4.5, Instagram PR-C3, YouTube, TikTok,
+ * Threads PR-C4) mount here on the enabling backend; the remaining
+ * platforms' composers mount the same way as their sets land, and
+ * until then the slot renders its owner's own not-yet-available
+ * state (spec §4.2.1(c)) — never a 131-invented substitute, never a
+ * fake control.
  *
  * OD131-2 (History tab) is UNANSWERED: history mounts as a slot in
  * this frame with its existing state only — no tab is created or
@@ -65,7 +66,7 @@ import {
 import { EmptyState } from '@/components/shared/ui/empty-state';
 import { Skeleton } from '@/components/shared/ui/skeleton';
 import { StatusDot } from '@/components/shared/ui/status-dot';
-import { InstagramComposerSlot } from '@/components/pages/dedicated';
+import { InstagramComposerSlot, ThreadsComposerSlot } from '@/components/pages/dedicated';
 
 /**
  * The X composer (spec 132 §4.5) loads on demand into the composer
@@ -379,6 +380,8 @@ export function DestinationSlots({
           <div className="mt-4">
             <TikTokComposer subdomain={subdomain} destination={destination} />
           </div>
+        ) : destination.platform === 'threads' ? (
+          <ThreadsComposerSlot subdomain={subdomain} destination={destination} />
         ) : undefined}
       </DestinationSlot>
       <DestinationSlot

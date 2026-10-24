@@ -32,6 +32,15 @@ export {
   type InstagramComposerSlotProps,
 } from './composer/instagram/instagram-composer-slot';
 export {
+  ThreadsComposer,
+  type ThreadsComposerProps,
+  type ThreadsComposerDestination,
+} from './composer/threads/threads-composer';
+export {
+  ThreadsComposerSlot,
+  type ThreadsComposerSlotProps,
+} from './composer/threads/threads-composer-slot';
+export {
   PostingTimeQuickAdd,
   type PostingTimeQuickAddProps,
 } from './composer/posting-time-quick-add';

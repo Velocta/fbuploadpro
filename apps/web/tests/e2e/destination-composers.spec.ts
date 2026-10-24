@@ -10,8 +10,10 @@
  * Instagram (PR-C3): the composer mounts in the 131-4 frame's composer
  * slot, a photo picked from the library pre-fills its real caption and
  * posts now through the unified enqueue; with a covering posting slot
- * the queue intent goes out at the slot. The six-viewport loop is the
- * mobile gate: no horizontal overflow, ≥44px primary targets.
+ * the queue intent goes out at the slot. Threads (PR-C4): a text post
+ * with a topic tag posts through the same enqueue. The six-viewport
+ * loops are the mobile gate: no horizontal overflow, ≥44px primary
+ * targets.
  */
 import { test, expect, type Page } from '@playwright/test';
 
@@ -174,6 +176,113 @@ test.describe('destination composer — Instagram (spec 132 PR-C3)', () => {
         'instagram-composer-open-library-btn',
         'instagram-composer-submit-btn',
         'instagram-composer-cancel-btn',
+      ]) {
+        const box = await page.getByTestId(testId).boundingBox();
+        expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+      }
+      await expectNoHorizontalOverflow(page);
+    });
+  }
+});
+
+const THREADS_DESTINATION_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+const THREADS_DESTINATION = {
+  id: THREADS_DESTINATION_ID,
+  externalDestinationId: 'th-1001',
+  name: 'My Brand',
+  handle: 'mybrand',
+  avatarUrl: null,
+  timezone: 'UTC',
+  status: 'active',
+  platform: 'threads',
+  account: {
+    id: 'acct-2',
+    displayName: 'Fixture Creator',
+    platform: 'threads',
+    status: 'active',
+  },
+};
+
+test.describe('destination composer — Threads (spec 132 PR-C4)', () => {
+  test.beforeEach(async ({ context }) => {
+    await context.addCookies([SESSION_COOKIE]);
+  });
+
+  async function openThreadsDestination(page: Page, state: FixtureState) {
+    await installApiFixtures(page, state);
+    await page.route(
+      `**/api/tenant/${SUB}/accounts/social/${THREADS_DESTINATION_ID}`,
+      (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ destination: THREADS_DESTINATION }),
+        })
+    );
+    await page.route(
+      `**/api/tenant/${SUB}/destinations/${THREADS_DESTINATION_ID}/posting-slots`,
+      (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            destinationId: THREADS_DESTINATION_ID,
+            timezone: 'UTC',
+            slots: [],
+          }),
+        })
+    );
+    await page.goto(`/tenant/${SUB}/destinations/${THREADS_DESTINATION_ID}`);
+    await expect(page.getByTestId('destination-name')).toHaveText('My Brand');
+  }
+
+  test('posts a text post through the destination enqueue', async ({ page }) => {
+    const state = createFixtureState();
+    await openThreadsDestination(page, state);
+    await page.setViewportSize({ width: 1024, height: 900 });
+
+    await expect(page.getByTestId('threads-composer-launch')).toBeVisible();
+    await page.getByTestId('threads-composer-open-btn').click();
+    await expect(page.getByTestId('threads-composer')).toBeVisible();
+
+    // The long-text attachment field exists (spec 124 verified it live).
+    await expect(
+      page.getByTestId('threads-composer-text-attachment-field')
+    ).toBeVisible();
+    await expect(page.getByTestId('threads-composer-limit-note')).toContainText(
+      '250 posts'
+    );
+
+    await page
+      .getByTestId('threads-composer-text-field')
+      .fill('Hello from the fixture');
+    await page
+      .getByTestId('threads-composer-topic-tag-field')
+      .fill('Photography');
+    await page.getByTestId('threads-composer-submit-btn').click();
+
+    await expect(page.getByText('Posted to My Brand.')).toBeVisible();
+    expect(state.queue).toHaveLength(1);
+    expect(state.queue[0]).toMatchObject({ caption: 'Hello from the fixture' });
+  });
+
+  for (const width of [320, 360, 390, 430, 768, 1024]) {
+    test(`composer fits ${width}px with ≥44px primary targets`, async ({ page }) => {
+      const state = createFixtureState();
+      await openThreadsDestination(page, state);
+      await page.setViewportSize({ width, height: 900 });
+
+      const openBtn = page.getByTestId('threads-composer-open-btn');
+      await expect(openBtn).toBeVisible();
+      expect((await openBtn.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+      await openBtn.click();
+      await expect(page.getByTestId('threads-composer')).toBeVisible();
+
+      for (const testId of [
+        'threads-composer-open-library-btn',
+        'threads-composer-submit-btn',
+        'threads-composer-cancel-btn',
       ]) {
         const box = await page.getByTestId(testId).boundingBox();
         expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);

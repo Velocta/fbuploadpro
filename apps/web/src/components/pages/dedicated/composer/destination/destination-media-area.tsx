@@ -44,7 +44,9 @@ export interface DestinationMediaAreaProps {
   accept: string;
   testIdPrefix: string;
   /** Extra per-item controls (e.g. Threads carousel alt-text fields). */
-  renderItemExtra?: (item: DestinationMediaItem, index: number) => React.ReactNode;
+  renderItemExtra?:
+    | ((item: DestinationMediaItem, index: number) => React.ReactNode)
+    | undefined;
 }
 
 const MEDIA_LIST_LIMIT = 50;
