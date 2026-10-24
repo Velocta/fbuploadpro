@@ -45,20 +45,38 @@ export function isMacDesktop(): boolean {
 }
 
 /**
- * Safely dispatches a window management action to the native Tauri Rust backend.
- * Gracefully returns false in non-desktop browser environments.
+ * Object responses for the two legacy bare-shape commands (spec 145 §7.3).
+ * These types live here (not in desktop-bridge.ts) to avoid a circular import:
+ * desktop-bridge.ts imports DesktopWindowActionEnum from this module.
+ * NOTE: the legacy helpers keep their false-on-failure behaviour (spec §6.1
+ * exception); only their success shape changed from a bare string to an object.
  */
-export async function sendDesktopWindowAction(action: DesktopWindowAction): Promise<boolean> {
+export interface DesktopWindowActionResult {
+  action: DesktopWindowAction;
+  applied: true;
+  maximized: boolean | null;
+}
+export interface DesktopOpenExternalUrlResult {
+  opened: true;
+  url: string;
+}
+
+/**
+ * Safely dispatches a window management action to the native Tauri Rust backend.
+ * Returns the §7.3 object on success, false in non-desktop environments or on
+ * failure (legacy behaviour, retained for existing callers).
+ */
+export async function sendDesktopWindowAction(
+  action: DesktopWindowAction,
+): Promise<DesktopWindowActionResult | false> {
   if (!isDesktopApp()) return false;
   try {
     const win = typeof window !== 'undefined' ? (window as any) : undefined;
     if (win?.__TAURI_INTERNALS__?.invoke) {
-      await win.__TAURI_INTERNALS__.invoke('handle_window_action', { action });
-      return true;
+      return (await win.__TAURI_INTERNALS__.invoke('handle_window_action', { action })) as DesktopWindowActionResult;
     }
     if (win?.__TAURI__?.core?.invoke) {
-      await win.__TAURI__.core.invoke('handle_window_action', { action });
-      return true;
+      return (await win.__TAURI__.core.invoke('handle_window_action', { action })) as DesktopWindowActionResult;
     }
     return false;
   } catch (err) {
@@ -69,9 +87,12 @@ export async function sendDesktopWindowAction(action: DesktopWindowAction): Prom
 
 /**
  * Safely opens an external URL using the OS default browser.
- * Validates URL scheme to prevent arbitrary protocol injection.
+ * Validates URL scheme to prevent arbitrary protocol injection. Inside the
+ * shell the Rust check is authoritative: a rejected URL returns false and is
+ * NOT silently opened via window.open (previous fallback masked validation).
+ * Outside the shell, window.open is still used (browser behaviour unchanged).
  */
-export async function openExternalUrl(url: string): Promise<boolean> {
+export async function openExternalUrl(url: string): Promise<DesktopOpenExternalUrlResult | false> {
   if (typeof window === 'undefined') return false;
 
   // Scheme validation: strictly http or https
@@ -82,24 +103,20 @@ export async function openExternalUrl(url: string): Promise<boolean> {
 
   if (!isDesktopApp()) {
     window.open(url, '_blank', 'noopener,noreferrer');
-    return true;
+    return { opened: true, url };
   }
 
   try {
     const win = window as any;
     if (win?.__TAURI_INTERNALS__?.invoke) {
-      await win.__TAURI_INTERNALS__.invoke('open_external_url', { url });
-      return true;
+      return (await win.__TAURI_INTERNALS__.invoke('open_external_url', { url })) as DesktopOpenExternalUrlResult;
     }
     if (win?.__TAURI__?.core?.invoke) {
-      await win.__TAURI__.core.invoke('open_external_url', { url });
-      return true;
+      return (await win.__TAURI__.core.invoke('open_external_url', { url })) as DesktopOpenExternalUrlResult;
     }
-    window.open(url, '_blank', 'noopener,noreferrer');
-    return true;
+    return false;
   } catch (err) {
-    console.warn('[Desktop IPC] openExternalUrl failed, falling back to window.open:', err);
-    window.open(url, '_blank', 'noopener,noreferrer');
-    return true;
+    console.warn('[Desktop IPC] openExternalUrl failed:', err);
+    return false;
   }
 }
