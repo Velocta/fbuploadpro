@@ -172,6 +172,7 @@ describe('Destination frame slots (spec 128 §9.4 wiring)', () => {
   it('mounts all four slots with the destination identity, and no tabs', () => {
     const { html } = render(
       <DestinationSlots
+        subdomain="main"
         destination={{
           id: 'dest-row-1',
           externalDestinationId: 'dest-1001',

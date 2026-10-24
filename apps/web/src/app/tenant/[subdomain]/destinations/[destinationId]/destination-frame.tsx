@@ -12,14 +12,17 @@
  * The frame mounts the four spec 128 slots (queue / composer /
  * posting-times / history) per spec §9.4. The slotted deliverables that
  * exist today (spec 134's queue panel + posting-times, spec 132's
- * composers) are Facebook-Page-shaped — they consume a Page row and the
- * Pages queue/slots APIs. There is no destination enqueue endpoint and
- * no destination posting-slots API today, so for a unified destination
- * each slot renders its owner's own not-yet-available state
- * (spec §4.2.1(c)) — never a 131-invented substitute, never a fake
- * control. The composer slot is spec 132's T-G0 host: it carries the
- * destination's identity (id + platform) as data attributes so the
- * platform composer sets mount into it without a frame change.
+ * Facebook composer) are Facebook-Page-shaped — they consume a Page row
+ * and the Pages queue/slots APIs. For a unified destination each slot
+ * renders its owner's own not-yet-available state (spec §4.2.1(c)) —
+ * never a 131-invented substitute, never a fake control — until that
+ * owner's deliverable mounts into it. The composer slot is spec 132's
+ * T-G0 host: it carries the destination's identity (id + platform) as
+ * data attributes so the platform composer sets mount into it without a
+ * frame change. The X composer (spec 132 §4.5) mounts here on the
+ * enabling backend (#750/#756: destination enqueue + posting-slots
+ * read); the remaining platforms' composers mount the same way as
+ * their sets land.
  *
  * OD131-2 (History tab) is UNANSWERED: history mounts as a slot in
  * this frame with its existing state only — no tab is created or
@@ -35,6 +38,7 @@
 import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useQuery } from '@tanstack/react-query';
 
 import { api, buildTenantApiPath, isApiError } from '@/lib/api';
@@ -58,6 +62,22 @@ import {
 import { EmptyState } from '@/components/shared/ui/empty-state';
 import { Skeleton } from '@/components/shared/ui/skeleton';
 import { StatusDot } from '@/components/shared/ui/status-dot';
+
+/**
+ * The X composer (spec 132 §4.5) loads on demand into the composer
+ * slot for X destinations — the bundle discipline the composer family
+ * uses for heavy leaves (spec 137 §3.6.1).
+ */
+const XComposer = dynamic(
+  () =>
+    import('@/components/pages/dedicated/composer/x/x-composer').then((m) => ({
+      default: m.XComposer,
+    })),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-40 w-full" />,
+  }
+);
 
 export const DESTINATION_NOT_FOUND_MESSAGE =
   "We couldn't find this destination.";
@@ -242,8 +262,9 @@ function DestinationSlot({
 
 /** The four spec 128 slots, mounted in spec order (§9.4). */
 export function DestinationSlots({
+  subdomain,
   destination,
-}: Readonly<{ destination: DestinationDetail }>) {
+}: Readonly<{ subdomain: string; destination: DestinationDetail }>) {
   return (
     <div className="mt-8 flex flex-col gap-8">
       <DestinationSlot
@@ -252,12 +273,27 @@ export function DestinationSlots({
         title="Queue"
         description="Posts scheduled for this destination will appear here once its queue is available."
       />
-      <DestinationSlot
-        destination={destination}
-        slot="composer"
-        title="Composer"
-        description="The composer for this destination will open here once it is available."
-      />
+      {destination.platform === 'x' ? (
+        <section
+          data-testid="destination-slot-composer"
+          data-destination-id={destination.id}
+          data-platform={destination.platform}
+          aria-label="Composer"
+          className="border-t border-line pt-6"
+        >
+          <h2 className="m-0 text-lg font-semibold text-ink">Composer</h2>
+          <div className="mt-4">
+            <XComposer subdomain={subdomain} destination={destination} />
+          </div>
+        </section>
+      ) : (
+        <DestinationSlot
+          destination={destination}
+          slot="composer"
+          title="Composer"
+          description="The composer for this destination will open here once it is available."
+        />
+      )}
       <DestinationSlot
         destination={destination}
         slot="posting-times"
@@ -345,7 +381,7 @@ export function DestinationFrame({
       {destination && (
         <>
           <DestinationSummary destination={destination} />
-          <DestinationSlots destination={destination} />
+          <DestinationSlots subdomain={subdomain} destination={destination} />
         </>
       )}
     </div>

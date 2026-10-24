@@ -4,6 +4,7 @@ import {
   type DestinationEnqueueIntent,
   type DestinationEnqueueKind,
   type FacebookDestinationOptions,
+  type Platform,
   type PostFormat,
 } from '@fbuploadpro/contracts';
 import { api, buildTenantApiPath } from '@/lib/api';
@@ -168,10 +169,27 @@ export function buildFacebookEnqueueRequest(
   return request;
 }
 
+/**
+ * The wire shape every platform's enqueue request shares. Each platform
+ * module spells its own slice field-for-field (the Facebook slice above;
+ * the X slice in `./x/x-destination-enqueue.ts`) and submits through
+ * this one transport — the server validates the full body against the
+ * contracts union, so the shared submit only names the common fields.
+ */
+export type DestinationEnqueueWireRequest = {
+  platform: Platform;
+  destinationId: string;
+  kind: DestinationEnqueueKind;
+  caption: string;
+  mediaItemIds: string[];
+  intent: DestinationEnqueueIntent;
+  [key: string]: unknown;
+};
+
 /** Submits one unified enqueue and validates the created-item body. */
 export async function submitDestinationEnqueue(
   subdomain: string,
-  request: FacebookEnqueueRequest
+  request: FacebookEnqueueRequest | DestinationEnqueueWireRequest
 ) {
   return api.post(buildTenantApiPath(subdomain, DESTINATION_ENQUEUE_PATH), request, {
     schema: DestinationEnqueueResponseSchema,
