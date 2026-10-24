@@ -169,17 +169,18 @@ describe('tiktok composer form (spec 132 G-TT)', () => {
       scheduleDate: null,
     });
     expect(built.ok).toBe(true);
-    if (!built.ok) return;
-    expect(built.request).toEqual({
-      platform: 'tiktok',
-      destinationId: DESTINATION_ID,
-      kind: 'video',
-      caption: 'Dance break',
-      mediaItemIds: [MEDIA_ID],
-      intent: 'queue',
-      platformOptions: { privacy: 'public', allowStitch: false },
-    });
-    expect('title' in built.request).toBe(false);
+    if (built.ok) {
+      expect(built.request).toEqual({
+        platform: 'tiktok',
+        destinationId: DESTINATION_ID,
+        kind: 'video',
+        caption: 'Dance break',
+        mediaItemIds: [MEDIA_ID],
+        intent: 'queue',
+        platformOptions: { privacy: 'public', allowStitch: false },
+      });
+      expect('title' in built.request).toBe(false);
+    }
   });
 
   it('builds a photo request with autoAddMusic and a scheduled time', () => {
@@ -196,13 +197,14 @@ describe('tiktok composer form (spec 132 G-TT)', () => {
       scheduleDate: when,
     });
     expect(built.ok).toBe(true);
-    if (!built.ok) return;
-    expect(built.request.kind).toBe('image');
-    expect(built.request.intent).toBe('scheduled');
-    expect(built.request.scheduledAt).toBe('2026-12-01T09:00:00.000Z');
-    expect(built.request.platformOptions).toEqual({
-      privacy: 'private',
-      autoAddMusic: false,
-    });
+    if (built.ok) {
+      expect(built.request.kind).toBe('image');
+      expect(built.request.intent).toBe('scheduled');
+      expect(built.request.scheduledAt).toBe('2026-12-01T09:00:00.000Z');
+      expect(built.request.platformOptions).toEqual({
+        privacy: 'private',
+        autoAddMusic: false,
+      });
+    }
   });
 });
