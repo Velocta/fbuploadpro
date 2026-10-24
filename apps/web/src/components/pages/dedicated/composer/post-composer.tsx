@@ -51,6 +51,13 @@ import { Button } from '@/components/shared/ui/button';
 /** Subset of a queue item needed to pre-fill the composer for editing. */
 export interface ComposerInitialPost {
   id: string;
+  /**
+   * The unified destination this item belongs to, when it is a
+   * unified queue item — the edit then settles through the unified
+   * item actions instead of the legacy route (spec 134 PR-134-3).
+   * Absent/null for legacy queue items.
+   */
+  destinationId?: string | null;
   mediaId?: string | null;
   postFormat?: PostFormat;
   linkUrl?: string | null;
@@ -226,6 +233,7 @@ export function PostComposer({
           ? await submitEditPost({
               subdomain,
               itemId: initialPost.id,
+              destinationId: initialPost.destinationId ?? null,
               format: submitted.format,
               caption: submitted.caption,
               link: submitted.link,

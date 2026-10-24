@@ -17,8 +17,10 @@
  */
 import * as React from 'react';
 
+import { ListDestinationPostingSlotsResponseSchema } from '@fbuploadpro/contracts';
 import { buildTenantApiPath } from '@/lib/api/client';
 import { DestinationDetailResponseSchema } from '@/lib/api/schemas/connect';
+import { ListDestinationQueueResponseSchema } from '@/lib/api/schemas/unified-queue';
 import { DataHydration, queryKeys } from '@/lib/data';
 import {
   createServerQueryClient,
@@ -49,6 +51,28 @@ export default async function DestinationSectionPage({
         serverApiFetch(
           buildTenantApiPath(subdomain, `/accounts/social/${destinationId}`),
           { schema: DestinationDetailResponseSchema }
+        ),
+    },
+    // Spec 134 PR-134-3: the queue + posting-times panels' first reads,
+    // prefetched on the same server-first discipline — the panels read
+    // these cache entries on mount instead of fetching cold.
+    {
+      queryKey: tenant.destinations.queue(destinationId),
+      queryFn: () =>
+        serverApiFetch(
+          buildTenantApiPath(subdomain, `/destinations/${destinationId}/queue`),
+          { schema: ListDestinationQueueResponseSchema }
+        ),
+    },
+    {
+      queryKey: tenant.destinations.slots(destinationId),
+      queryFn: () =>
+        serverApiFetch(
+          buildTenantApiPath(
+            subdomain,
+            `/destinations/${destinationId}/posting-slots`
+          ),
+          { schema: ListDestinationPostingSlotsResponseSchema }
         ),
     },
   ]);

@@ -109,6 +109,24 @@ export async function resolveFacebookDestinationId(input: {
   );
 }
 
+/**
+ * The composer format → unified kind/platform-format mapping, shared
+ * by the create builder below and the composer EDIT flow's unified
+ * branch (composer-submit) so the two can never drift: reel is a
+ * `video` kind carrying the `reel` platform format (the unified kind
+ * vocabulary has no 'reel'); every other format is its own kind.
+ */
+export function facebookFormatToUnifiedKind(format: PostFormat): {
+  kind: DestinationEnqueueKind;
+  platformFormat: string | null;
+} {
+  if (format === 'reel') return { kind: 'video', platformFormat: 'reel' };
+  if (format === 'video') return { kind: 'video', platformFormat: null };
+  if (format === 'image') return { kind: 'image', platformFormat: null };
+  if (format === 'story') return { kind: 'story', platformFormat: null };
+  return { kind: 'text', platformFormat: null };
+}
+
 export interface FacebookEnqueueShape {
   format: PostFormat;
   caption: string;
@@ -139,20 +157,13 @@ export function buildFacebookEnqueueRequest(
 ): FacebookEnqueueRequest {
   const { format, caption, link, items, intent, scheduleDate } = shape;
 
-  const kind =
-    format === 'reel' || format === 'video'
-      ? ('video' as const)
-      : format === 'image'
-        ? ('image' as const)
-        : format === 'story'
-          ? ('story' as const)
-          : ('text' as const);
+  const { kind, platformFormat } = facebookFormatToUnifiedKind(format);
 
   const request: FacebookEnqueueRequest = {
     platform: 'facebook',
     destinationId,
     kind,
-    platformFormat: format === 'reel' ? 'reel' : null,
+    platformFormat,
     caption,
     mediaItemIds: format !== 'text' && items[0] ? [items[0].id] : [],
     intent:
