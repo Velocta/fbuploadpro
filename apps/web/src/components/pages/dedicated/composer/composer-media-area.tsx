@@ -42,7 +42,10 @@ export interface ComposerMediaItem {
 }
 
 export interface ComposerMediaAreaProps {
-  pageId: string;
+  /** The host page's id — carried for the host contract; the area itself
+   *  reads only the tenant media library, so destination composers
+   *  (spec 132 gated sets) omit it. */
+  pageId?: string;
   subdomain: string;
   format: PostFormat;
   items: ComposerMediaItem[];
