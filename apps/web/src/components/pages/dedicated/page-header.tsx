@@ -236,7 +236,7 @@ export function DedicatedPageHeader({
           <DedicatedAvatar page={page} ringClass={statusInfo.ringClass} monogram={monogram} />
 
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               <h1
                 data-testid="dedicated-page-heading"
                 className="m-0 truncate text-xxl font-bold tracking-h1 text-ink"
@@ -287,7 +287,7 @@ export function DedicatedPageHeader({
         </div>
 
         {/* Actions cluster */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <span
             data-testid="header-automation-status"
             className="inline-flex h-11 items-center text-body font-medium text-ink-sub"
