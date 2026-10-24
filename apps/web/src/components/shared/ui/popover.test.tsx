@@ -5,13 +5,15 @@ import userEvent from "@testing-library/user-event";
 import { Popover, PopoverTrigger, PopoverContent, PopoverHeader, PopoverTitle, PopoverDescription } from "./popover";
 import { Button } from "./button";
 
-function TestPopover() {
+function TestPopover({
+  layer,
+}: Readonly<{ layer?: "popover" | "overlayTop" | undefined }> = {}) {
   return (
     <Popover>
       <PopoverTrigger asChild>
         <Button variant="outline">Details</Button>
       </PopoverTrigger>
-      <PopoverContent>
+      <PopoverContent layer={layer}>
         <PopoverHeader>
           <PopoverTitle>Post details</PopoverTitle>
           <PopoverDescription>Scheduled for tomorrow.</PopoverDescription>
@@ -36,6 +38,16 @@ describe("Popover", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByText("Post details")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
+  });
+
+  it("can lift the panel to the top overlay layer for triggers inside modal surfaces", async () => {
+    const user = userEvent.setup();
+    render(<TestPopover layer="overlayTop" />);
+    await user.click(screen.getByRole("button", { name: "Details" }));
+    const content = screen.getByText("Post details").closest('[data-slot="popover-content"]') as HTMLElement;
+    expect(content.dataset.layer).toBe("overlayTop");
+    expect(content.className).toContain("z-overlay-top");
+    expect(content.className).not.toContain("z-popover");
   });
 
   it("spec 142 F10: panel is capped at the Radix available width", async () => {

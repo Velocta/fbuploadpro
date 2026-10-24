@@ -26,17 +26,29 @@ function PopoverContent({
   align = "center",
   sideOffset = 4,
   collisionPadding = 8,
+  layer = "popover",
   ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+}: React.ComponentProps<typeof PopoverPrimitive.Content> & {
+  /**
+   * Stacking layer for the portalled panel. Use `overlayTop` when the
+   * trigger lives inside a modal surface on the dialog tier (for
+   * example the mobile sidebar Sheet): the default popover tier sits
+   * below that surface's overlay, which would render the panel
+   * visible in the DOM but unreachable to pointer input.
+   */
+  layer?: "popover" | "overlayTop" | undefined;
+}) {
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
         data-slot="popover-content"
+        data-layer={layer}
         align={align}
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}
         className={cn(
-          "z-popover w-72 max-w-(--radix-popover-content-available-width) rounded-md border border-line bg-panel p-4 text-ink shadow-elevated outline-none",
+          layer === "overlayTop" ? "z-overlay-top" : "z-popover",
+          "w-72 max-w-(--radix-popover-content-available-width) rounded-md border border-line bg-panel p-4 text-ink shadow-elevated outline-none",
           className
         )}
         {...props}

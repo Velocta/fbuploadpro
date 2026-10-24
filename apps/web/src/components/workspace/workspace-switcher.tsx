@@ -347,6 +347,7 @@ export function WorkspaceStudioFooter({
               side="top"
               align="start"
               sideOffset={6}
+              layer={isMobile ? 'overlayTop' : 'popover'}
               data-testid="workspace-switcher-dropdown"
               aria-label="Workspace and profile"
               className="flex w-60 flex-col gap-1 p-1"

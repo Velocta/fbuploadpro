@@ -119,40 +119,67 @@ test.describe('shell navigation + workspace switch (spec 130 §5.9)', () => {
   });
 });
 
+async function expectSwitcherPanelHitTestable(page: Page): Promise<void> {
+  const dropdown = page.getByTestId('workspace-switcher-dropdown');
+  await expect(dropdown).toBeVisible();
+
+  // Visibility alone missed the production bug: the panel rendered
+  // underneath the mobile drawer's dim overlay. Its centre must be
+  // the topmost hit target, inside the panel itself.
+  const centreHitInsidePanel = await dropdown.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(
+      box.left + box.width / 2,
+      box.top + box.height / 2
+    );
+    return hit !== null && (hit === element || element.contains(hit));
+  });
+  expect(centreHitInsidePanel).toBe(true);
+}
+
+async function exerciseMobileWorkspaceSwitch(page: Page): Promise<void> {
+  await signInToTenantHome(page);
+  await page.getByRole('button', { name: 'Toggle Sidebar' }).first().tap();
+  await page.getByTestId('workspace-switcher-trigger').tap();
+  await expectSwitcherPanelHitTestable(page);
+
+  // A row tap must complete the switch; if the drawer dismisses on
+  // pointer-down first, the click never reaches the row.
+  await page.getByTestId('workspace-option-beta').tap();
+  await expect(page).toHaveURL(/\/tenant\/beta\/?$/);
+  await expect(page.getByRole('heading', { name: /Workspace:/ })).toBeVisible();
+}
+
 test.describe('shell navigation at phone width (spec 142 mobile gate)', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-  test('drawer navigation is fully tappable and nothing overflows at 390px and 320px', async ({
+  test('drawer navigation is fully tappable and nothing overflows at 390px', async ({
     page,
   }) => {
     await signInToTenantHome(page);
 
-    // No horizontal overflow at 390px.
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth)
     ).toBeLessThanOrEqual(390);
 
-    // Open the drawer from the header trigger and tap a leaf once.
     await page.getByRole('button', { name: 'Toggle Sidebar' }).first().tap();
     await page.getByRole('link', { name: /^Media Library/ }).tap();
     await expect(page).toHaveURL(new RegExp(`/tenant/${TENANT.subdomain}/media$`));
+  });
 
-    // 320px: same checks, plus the switcher popover fits the viewport.
+  test('footer switcher is hit-testable and switches workspace at 390px', async ({
+    page,
+  }) => {
+    await exerciseMobileWorkspaceSwitch(page);
+  });
+
+  test('footer switcher is hit-testable and switches workspace at 320px', async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 320, height: 720 });
+    await exerciseMobileWorkspaceSwitch(page);
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth)
     ).toBeLessThanOrEqual(320);
-
-    await page.getByRole('button', { name: 'Toggle Sidebar' }).first().tap();
-    await page.getByTestId('workspace-switcher-trigger').tap();
-    const dropdown = page.getByTestId('workspace-switcher-dropdown');
-    await expect(dropdown).toBeVisible();
-    const box = await dropdown.boundingBox();
-    expect(box).not.toBeNull();
-    if (box) {
-      expect(box.x).toBeGreaterThanOrEqual(0);
-      expect(box.x + box.width).toBeLessThanOrEqual(320);
-    }
-    await expect(page.getByTestId('workspace-option-beta')).toBeVisible();
   });
 });
