@@ -54,7 +54,11 @@ import {
   sortPagesAttentionFirst,
 } from '@/components/pages/pages-helpers';
 import { queryKeys } from '@/lib/data/query-keys';
-import TenantDedicatedPageView from '@/app/tenant/[subdomain]/pages/[pageId]/page';
+// Spec 131 PR-131-3 (named update, §8.1 server-first): the [pageId]
+// route is now a server component; the client frame it composes lives
+// in page-section-shell.tsx — the same split PR-131-2 used for the
+// pages list (page.tsx server + pages-shell.tsx client).
+import TenantDedicatedPageView from '@/app/tenant/[subdomain]/pages/[pageId]/page-section-shell';
 import type { FacebookAccountItem } from '@/components/accounts/account-card';
 import { render } from '../components/setup';
 import {
@@ -964,12 +968,16 @@ describe('Facebook Pages UI Suite (Spec 032)', () => {
 
   describe('TenantDedicatedPageView (/tenant/[subdomain]/pages/[pageId]/page.tsx)', () => {
     it('renders the dedicated page placeholder (dedicated-page-placeholder) and "Back to Pages" navigation (back-to-pages-btn)', () => {
+      // PR-131-3: the frame reads through React Query — the static
+      // render needs a provider (fresh client, queries stay pending).
       const { hasAttribute, hasText } = render(
-        <TenantDedicatedPageView
-          subdomainProp="acme"
-          pageIdProp="page-uuid-1"
-          pageNameProp="Cyberdyne Reels"
-        />
+        <QueryClientProvider client={new QueryClient()}>
+          <TenantDedicatedPageView
+            subdomainProp="acme"
+            pageIdProp="page-uuid-1"
+            pageNameProp="Cyberdyne Reels"
+          />
+        </QueryClientProvider>
       );
 
       expect(hasAttribute('data-testid', 'dedicated-page-placeholder')).toBe(

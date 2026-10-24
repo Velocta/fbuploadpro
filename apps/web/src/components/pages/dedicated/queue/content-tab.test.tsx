@@ -15,7 +15,6 @@ import {
 } from '@/lib/storage/preferences';
 import { toast } from '@/components/shared/ui/toast';
 import type { FacebookPageItem } from '../../page-card';
-import type { DedicatedQueueItem } from './queue-types';
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ subdomain: 'acme' }),
@@ -167,15 +166,13 @@ function renderPanel(items: Array<Record<string, unknown>>, accountStatus = 'act
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: 0 } },
   });
+  // Spec 131 PR-131-3 (props bridge deleted): the panel takes no item
+  // props — it reads the shared queue cache key, which the fetch mock
+  // below answers exactly as the route's server prefetch would seed it.
   const props = {
     page: PAGE,
-    queueItems: items as unknown as DedicatedQueueItem[],
     isLoading: false,
-    onPublishNow: vi.fn(async () => {}),
-    onUpdateItem: vi.fn(async () => {}),
-    onDeleteItem: vi.fn(async () => {}),
     onOpenAddQueue: vi.fn(),
-    onMutated: vi.fn(),
   };
   const utils = render(
     <QueryClientProvider client={queryClient}>
