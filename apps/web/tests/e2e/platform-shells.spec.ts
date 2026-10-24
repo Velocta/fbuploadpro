@@ -13,7 +13,8 @@
  * (platform heading), the verbatim testing notice and description, its
  * connect link where the platform has one today (X has none), and the
  * Return to Overview action — stacked with zero horizontal overflow and
- * ≥44px targets.
+ * compact 36px targets (compact default density — Shahzeb 2026-10-24,
+ * spec 129 OD-4 as amended; supersedes the spec 142 F01 44px band).
  */
 import { test, expect, type Page } from '@playwright/test';
 
@@ -73,15 +74,15 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(overflow).toBeLessThanOrEqual(0);
 }
 
-async function expectMinHeight44(locator: ReturnType<Page['getByRole']>) {
+async function expectCompactHeight(locator: ReturnType<Page['getByRole']>) {
   const box = await locator.boundingBox();
-  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(36);
 }
 
 test.describe('platform accounts shells (one shared shell)', () => {
   for (const width of [320, 390, 768]) {
     for (const platform of PLATFORMS) {
-      test(`${platform.name} shell renders at ${width}px with no overflow and 44px targets`, async ({
+      test(`${platform.name} shell renders at ${width}px with no overflow and compact 36px targets`, async ({
         page,
         context,
       }) => {
@@ -116,7 +117,7 @@ test.describe('platform accounts shells (one shared shell)', () => {
           const connect = page.getByTestId(platform.connectTestId);
           await expect(connect).toBeVisible();
           await expect(connect).toHaveText(`Connect ${platform.name}`);
-          await expectMinHeight44(connect);
+          await expectCompactHeight(connect);
         } else {
           await expect(
             page.locator('a[href*="/api/connect/"]')
@@ -125,7 +126,7 @@ test.describe('platform accounts shells (one shared shell)', () => {
 
         const back = page.getByRole('button', { name: 'Return to Overview' });
         await expect(back).toBeVisible();
-        await expectMinHeight44(back);
+        await expectCompactHeight(back);
         await expectNoHorizontalOverflow(page);
       });
     }

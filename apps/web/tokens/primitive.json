@@ -247,41 +247,41 @@
       }
     },
     "size": {
-      "$description": "Type scale — 1.25 modular ratio on a 14px product body (UI research §5). The 13px step is the named metadata step (the de-facto 0.8125rem used across dense surfaces), not an accident.",
+      "$description": "Type scale — 1.25 modular ratio on a 13px product body (compact default density — Shahzeb, 2026-10-24; spec 129 OD-4 as amended). The 12px step is the named metadata step (body − 1px), not an accident.",
       "body": {
-        "$description": "Product body size (1rem = 16px; body renders at 0.875rem)",
+        "$description": "Product body size (1rem = 16px; body renders at 0.8125rem — the legacy app's de-facto size, now the specced compact default)",
         "$type": "dimension",
-        "$value": "14px"
+        "$value": "13px"
       },
       "lg": {
-        "$description": "14 * 1.25 — lead text, h4",
+        "$description": "13 * 1.25 — lead text, h4",
         "$type": "dimension",
-        "$value": "17.5px"
+        "$value": "16.25px"
       },
       "metadata": {
         "$description": "Named metadata step — dense tables, captions, secondary labels",
         "$type": "dimension",
-        "$value": "13px"
+        "$value": "12px"
       },
       "xl": {
-        "$description": "14 * 1.25^2 — h3",
+        "$description": "13 * 1.25^2 — h3",
         "$type": "dimension",
-        "$value": "21.88px"
+        "$value": "20.31px"
       },
       "xs": {
-        "$description": "14 / 1.25^2 — fine print",
+        "$description": "13 / 1.25 — fine print",
         "$type": "dimension",
-        "$value": "11.2px"
+        "$value": "10.4px"
       },
       "xxl": {
-        "$description": "14 * 1.25^3 — h2",
+        "$description": "13 * 1.25^3 — h2",
         "$type": "dimension",
-        "$value": "27.34px"
+        "$value": "25.39px"
       },
       "xxxl": {
-        "$description": "14 * 1.25^4 — h1 / display",
+        "$description": "13 * 1.25^4 — h1 / display",
         "$type": "dimension",
-        "$value": "34.18px"
+        "$value": "31.74px"
       }
     },
     "tabularNums": {

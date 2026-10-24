@@ -7,8 +7,10 @@
  * - Styling: token-backed utilities only (panel surface, ink text,
  *   hairline separators, hover/active token steps) — no shadcn theme
  *   classes, no arbitrary values, no literals.
- * - Targets (UI Rule 8 / spec 142): every row is a 44px minimum hit
- *   area (`min-h-11`), the search input is 44px tall; the selected
+ * - Targets: every row is a 36px minimum (`min-h-9`), the search input
+ *   is the compact 36px control height — the single default density at
+ *   every viewport (spec 129 OD-4 as amended, Shahzeb 2026-10-24,
+ *   superseding the spec 142 F01 44px band); the selected
  *   row is never colour alone — cmdk marks it `data-selected` and the
  *   row also carries `aria-selected` from cmdk's listbox semantics.
  * - Five states (UI Rule 16): default, typing/filtering (cmdk's
@@ -101,7 +103,7 @@ function CommandInput({
       <CommandPrimitive.Input
         data-slot="command-input"
         className={cn(
-          "flex h-11 w-full bg-transparent text-lg text-ink outline-none placeholder:text-ink-dim disabled:cursor-not-allowed disabled:opacity-50",
+          "flex h-control w-full bg-transparent text-lg text-ink outline-none placeholder:text-ink-dim disabled:cursor-not-allowed disabled:opacity-50",
           className
         )}
         {...props}
@@ -166,7 +168,7 @@ function CommandItem({
     <CommandPrimitive.Item
       data-slot="command-item"
       className={cn(
-        "relative flex min-h-11 cursor-default items-center gap-2 rounded-sm px-3 py-2 text-body text-ink outline-none select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-[selected=true]:bg-hover [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+        "relative flex min-h-9 cursor-default items-center gap-2 rounded-sm px-3 py-1.5 text-body text-ink outline-none select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-[selected=true]:bg-hover [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
         className
       )}
       {...props}

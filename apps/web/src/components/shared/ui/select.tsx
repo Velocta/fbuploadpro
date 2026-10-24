@@ -5,11 +5,13 @@
  * typeahead works, Esc closes and returns focus — matrix §30). Use for
  * 6–15 known options (matrix §13); fewer visible options are radios, more
  * searchable options are a combobox in the surface specs. Trigger follows
- * the Input field contract (44px default per spec 142 F01, token hairline,
+ * the Input field contract (compact 36px default via the control-height
+ * token — spec 129 OD-4 as amended, Shahzeb 2026-10-24, superseding the
+ * spec 142 F01 44px band), token hairline,
  * aria-invalid state, and F02 field text: 16px below `sm` via `text-base`,
- * 14px product body via `sm:text-body`). Panel height is bounded by the
+ * 13px product body via `sm:text-body`). Panel height is bounded by the
  * Radix available-height variable and the panel carries collision padding
- * (spec 142 F09); items are 44px rows.
+ * (spec 142 F09); items are 36px rows.
  *
  * Layering (spec 133 PR-133-3 fix, named there): the panel uses the
  * overlay-top step, NOT the popover step — a Select is a legitimate
@@ -63,7 +65,7 @@ function SelectTrigger({
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "flex w-fit max-w-full min-w-0 items-center justify-between gap-2 rounded-sm border border-line bg-canvas px-3 text-base whitespace-nowrap text-ink transition-colors duration-fast outline-none focus-visible:border-brand-gold disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-brand-rose data-[placeholder]:text-ink-dim data-[size=default]:h-11 data-[size=sm]:h-8 sm:text-body [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4 [&>[data-slot=select-value]]:min-w-0 [&>[data-slot=select-value]]:truncate",
+        "flex w-fit max-w-full min-w-0 items-center justify-between gap-2 rounded-sm border border-line bg-canvas px-3 text-base whitespace-nowrap text-ink transition-colors duration-fast outline-none focus-visible:border-brand-gold disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-brand-rose data-[placeholder]:text-ink-dim data-[size=default]:h-control data-[size=sm]:h-control-sm sm:text-body [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4 [&>[data-slot=select-value]]:min-w-0 [&>[data-slot=select-value]]:truncate",
         className
       )}
       {...props}
@@ -120,7 +122,7 @@ function SelectItem({ className, children, ...props }: React.ComponentProps<type
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex min-h-11 w-full cursor-default items-center gap-2 rounded-xs py-1.5 pr-8 pl-2 text-body outline-none select-none focus:bg-hover focus:text-ink data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4",
+        "relative flex min-h-9 w-full cursor-default items-center gap-2 rounded-xs py-1.5 pr-8 pl-2 text-body outline-none select-none focus:bg-hover focus:text-ink data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4",
         className
       )}
       {...props}

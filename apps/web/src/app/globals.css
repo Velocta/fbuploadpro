@@ -145,6 +145,17 @@
   --container-6xl: var(--container-6xl);
   --container-7xl: var(--container-7xl);
 
+  /* Control heights (component tokens — the compact control-height family,
+     spec 129 OD-4 as amended 2026-10-24: 36px default / 40px lg / 32px sm.
+     h-control* and size-control* resolve these; button/input/select presets
+     consume them so the control scale lives in exactly one place.) */
+  --height-control: var(--component-control-height);
+  --height-control-lg: var(--component-control-height-lg);
+  --height-control-sm: var(--component-control-height-sm);
+  --size-control: var(--component-control-height);
+  --size-control-lg: var(--component-control-height-lg);
+  --size-control-sm: var(--component-control-height-sm);
+
   /* Elevation (semantic, per-mode) */
   --shadow-card: var(--shadow-card);
   --shadow-elevated: var(--shadow-elevated);

@@ -24,10 +24,10 @@ import {
 } from "./form";
 
 describe("Input / Textarea", () => {
-  it("input renders with the 44px field contract and placeholder", () => {
+  it("input renders with the compact 36px field contract and placeholder", () => {
     render(<Input aria-label="Name" placeholder="Your name" />);
     const input = screen.getByLabelText("Name");
-    expect(input.className).toContain("h-11");
+    expect(input.className).toContain("h-control");
     expect(input.getAttribute("placeholder")).toBe("Your name");
   });
 

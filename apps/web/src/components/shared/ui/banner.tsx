@@ -7,7 +7,8 @@
  * fix action. It sits at the top of a view, is never a toast, and stays
  * until the state resolves or the user dismisses it. Geometry (spec 142
  * F14/F05): the row wraps, the fix action moves to its own full-width row
- * below `sm`, and the dismiss control is a 44px target. Colour + icon + text
+ * below `sm`, and the dismiss control is a 36px target (compact default
+ * density — spec 129 OD-4 as amended, Shahzeb 2026-10-24). Colour + icon + text
  * (OD-3): the variant's icon always renders alongside the message.
  */
 import * as React from "react";
@@ -52,7 +53,7 @@ function Banner({ variant = "info", title, description, action, onDismiss, class
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss banner"
-          className="inline-flex size-11 shrink-0 items-center justify-center rounded-sm text-ink-sub outline-none hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold"
+          className="inline-flex size-9 shrink-0 items-center justify-center rounded-sm text-ink-sub outline-none hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold"
         >
           <XIcon className="size-4" aria-hidden />
         </button>

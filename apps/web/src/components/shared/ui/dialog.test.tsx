@@ -92,7 +92,7 @@ describe("Dialog", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("spec 142 F04/F05: phone gutters, dvh-bounded scrolling panel, 44px close", async () => {
+  it("spec 142 F04/F05: phone gutters, dvh-bounded scrolling panel, 36px close", async () => {
     const user = userEvent.setup();
     render(<TestDialog />);
     await user.click(screen.getByRole("button", { name: "Open dialog" }));
@@ -103,7 +103,7 @@ describe("Dialog", () => {
     expect(dialog.className).toContain("sm:max-w-lg");
     expect(dialog.className).not.toMatch(/-\[/);
     const close = screen.getByRole("button", { name: "Close" });
-    expect(close.className).toContain("size-11");
+    expect(close.className).toContain("size-9");
   });
 
   it("keyboard-only user can open the dialog with Enter on the trigger", async () => {

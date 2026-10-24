@@ -2,7 +2,7 @@
  * Textarea — shadcn base, adapted to the same field contract as Input
  * (token hairline, aria-invalid error state, focus-visible ring baseline,
  * and the spec 142 F02 field text size: 16px below `sm` via `text-base`
- * so iOS does not focus-zoom, 14px product body via `sm:text-body`).
+ * so iOS does not focus-zoom, 13px product body via `sm:text-body`).
  */
 import * as React from "react";
 

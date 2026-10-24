@@ -419,9 +419,9 @@ const sidebarMenuButtonVariants = cva(
         outline: "border border-line bg-panel hover:bg-hover hover:text-ink",
       },
       size: {
-        default: "min-h-10 text-body",
+        default: "min-h-9 text-body",
         sm: "min-h-8 text-metadata",
-        lg: "min-h-12 text-body group-data-[collapsible=icon]:p-0",
+        lg: "min-h-10 text-body group-data-[collapsible=icon]:p-0",
       },
     },
     defaultVariants: { variant: "default", size: "default" },

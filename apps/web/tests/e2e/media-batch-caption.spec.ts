@@ -11,7 +11,7 @@
  * The mobile test is this surface's spec 142 gate for the dialogs:
  * at 320 / 390 / 768 CSS px the Set caption and New folder dialogs
  * fit the viewport with no document overflow, their primary actions
- * are at least 44px tall, and the dialog content stays inside the
+ * are compact 36px tall, and the dialog content stays inside the
  * viewport (internal scroll, no clipping).
  */
 
@@ -136,7 +136,7 @@ test.describe('media batch caption', () => {
   // One test per width (320 / 390 / 768) so each stays well inside
   // the per-test budget while walking all three dialogs.
   for (const width of [320, 390, 768]) {
-    test(`dialogs at ${width}px: fit viewport, 44px actions, no overflow`, async ({
+    test(`dialogs at ${width}px: fit viewport, compact 36px actions, no overflow`, async ({
       page,
       context,
     }) => {
@@ -160,7 +160,7 @@ test.describe('media batch caption', () => {
       await expect(captionDialog).toBeVisible();
       await expectWithinViewport(captionDialog, page);
       await expectNoDocumentOverflow(page);
-      await expectMinTouchHeight(page.getByTestId('apply-batch-caption'));
+      await expectMinTouchHeight(page.getByTestId('apply-batch-caption'), 36);
       await maybeScreenshot(page, `dialog-batch-caption-${width}`);
       await page.keyboard.press('Escape');
       await expect(captionDialog).toBeHidden();
@@ -171,8 +171,8 @@ test.describe('media batch caption', () => {
       await expect(folderDialog).toBeVisible();
       await expectWithinViewport(folderDialog, page);
       await expectNoDocumentOverflow(page);
-      await expectMinTouchHeight(page.getByTestId('new-folder-name-input'));
-      await expectMinTouchHeight(page.getByTestId('submit-create-folder'));
+      await expectMinTouchHeight(page.getByTestId('new-folder-name-input'), 36);
+      await expectMinTouchHeight(page.getByTestId('submit-create-folder'), 36);
       await maybeScreenshot(page, `dialog-new-folder-${width}`);
       // The "Place inside" Select panel must render above the dialog
       // and stay inside the viewport (portal stacking proof).
@@ -190,7 +190,7 @@ test.describe('media batch caption', () => {
       const moveDialog = page.getByTestId('move-target-dialog');
       await expect(moveDialog).toBeVisible();
       await expectWithinViewport(moveDialog, page);
-      await expectMinTouchHeight(page.getByTestId('move-destination-select'));
+      await expectMinTouchHeight(page.getByTestId('move-destination-select'), 36);
       await page.getByTestId('move-destination-select').click();
       const moveLibraryOption = page.getByRole('option', { name: 'Library' });
       await expect(moveLibraryOption).toBeVisible();

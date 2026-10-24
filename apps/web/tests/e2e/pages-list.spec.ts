@@ -8,7 +8,7 @@
  * discover → select → import → finish summary banner). Also carries
  * the spec 142 mobile gate for this surface: the list and the
  * multi-step dialog are exercised at 320 / 390 / 768 CSS px with
- * zero-document-overflow and 44px-target assertions.
+ * zero-document-overflow and compact-target assertions (the Add action is the compact 36px control height — Shahzeb 2026-10-24, spec 129 OD-4 as amended).
  *
  * All API reads/writes are fixture-served at the browser boundary
  * (fixtures/api.ts + the route overrides below) — no production
@@ -183,7 +183,7 @@ test.describe('pages list + add page (spec 131 PR-131-2)', () => {
       const addBtn = page.getByTestId('header-add-page-btn');
       const addBox = await addBtn.boundingBox();
       expect(addBox, 'Add Page target at ' + width).not.toBeNull();
-      expect(addBox!.height).toBeGreaterThanOrEqual(44);
+      expect(addBox!.height).toBeGreaterThanOrEqual(36);
 
       await addBtn.click();
       await expect(page.getByTestId('add-page-modal')).toBeVisible({ timeout: 15_000 });

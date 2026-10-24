@@ -3,8 +3,8 @@
  * publish logs and search results (matrix §10) because position, totals and
  * bookmarking matter there. Links are real anchors (href-driven, so a page
  * position is shareable); the current page carries aria-current="page" and
- * the outline variant. Targets are 44px via the Button size scale
- * (spec 142 F01/F15), and the row wraps and centres when many links
+ * the outline variant. Targets follow the compact Button size scale
+ * (36px default — spec 129 OD-4 as amended, Shahzeb 2026-10-24), and the row wraps and centres when many links
  * exceed a compact viewport instead of overflowing it.
  */
 import * as React from "react";
@@ -78,7 +78,7 @@ function PaginationEllipsis({ className, ...props }: React.ComponentProps<"span"
     <span
       aria-hidden
       data-slot="pagination-ellipsis"
-      className={cn("flex size-11 items-center justify-center", className)}
+      className={cn("flex size-9 items-center justify-center", className)}
       {...props}
     >
       <MoreHorizontalIcon className="size-4" />

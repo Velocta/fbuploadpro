@@ -14,7 +14,7 @@
  * Facebook." (§5.2). A third case carries the spec 142 mobile gate
  * for the info tabs (YouTube/X/TikTok): at 320/390/768 CSS px the
  * card and its "Go to Accounts" action fit the viewport with no
- * document overflow and a ≥44px touch target.
+ * document overflow and a compact 36px touch target.
  *
  * Fixture discipline (A3): the BYOC route is intercepted at the
  * browser boundary with a stateful handler registered after the
@@ -236,7 +236,7 @@ test.describe('settings — info tabs at mobile widths (spec 142 gate, PR-135-4)
   ] as const;
 
   for (const width of [320, 390, 768]) {
-    test(`info tabs fit ${width}px: no overflow, card + Accounts action inside the viewport, ≥44px target`, async ({
+    test(`info tabs fit ${width}px: no overflow, card + Accounts action inside the viewport, compact 36px target`, async ({
       page,
       context,
     }) => {
@@ -265,7 +265,7 @@ test.describe('settings — info tabs at mobile widths (spec 142 gate, PR-135-4)
         await expectNoDocumentOverflow(page);
         await expectWithinViewport(card, page);
         await expectWithinViewport(link, page);
-        await expectMinTouchHeight(link);
+        await expectMinTouchHeight(link, 36);
       }
     });
   }

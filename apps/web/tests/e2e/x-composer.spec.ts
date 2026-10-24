@@ -10,7 +10,7 @@
  * Per viewport (320 / 360 / 390 / 430 / 768 / 1024): the X composer
  * renders inside the frame's composer slot with its identity header,
  * the contracts-derived limit note and the weighted counter, stacked
- * with zero horizontal overflow and a ≥44px submit target. Flow tests
+ * with zero horizontal overflow and a compact 36px submit target (compact default density — Shahzeb 2026-10-24, spec 129 OD-4 as amended). Flow tests
  * at 390px: a Post-now submit lands the success banner, and the poll
  * builder opens with its option fields.
  */
@@ -99,7 +99,7 @@ test.describe('x composer in the destination frame', () => {
 
       const submit = page.getByTestId('x-composer-submit-btn');
       const box = await submit.boundingBox();
-      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(36);
       await expectNoHorizontalOverflow(page);
     });
   }

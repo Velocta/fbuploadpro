@@ -4,9 +4,11 @@
  * Button — shadcn base (cva variants + Radix Slot for asChild), adapted:
  * - Styling: token-backed utilities only. Primary is the Binance gold-on-black
  *   pairing (bg-primary / text-on-primary); shadcn's default theme is gone.
- * - Sizes per UI Rule 8 + spec 142 (F01): default and icon targets are
- *   44px (the primary touch band); sm/icon-sm stay explicitly dense
- *   (32px), are non-primary only, and are never a page primary.
+ * - Sizes: the compact control-height family (component tokens —
+ *   default 36px, lg 40px, sm/icon-sm 32px), the single default density
+ *   at every viewport (spec 129 OD-4 as amended, Shahzeb 2026-10-24:
+ *   compact mode is the default, mobile included — this supersedes the
+ *   spec 142 F01 44px primary touch band).
  * - Five states: `loading` renders a spinner at the button's final geometry
  *   with aria-busy and blocks activation; `disabledReason` implements
  *   disabled-with-a-reason (UI Rule 16 / UX Rule 19) — the reason is exposed
@@ -33,12 +35,12 @@ const buttonVariants = cva(
         link: "text-link underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-11 px-4 py-2",
-        sm: "h-8 gap-1.5 px-3 text-metadata",
-        lg: "h-11 px-6 text-lg",
-        icon: "size-11",
-        "icon-sm": "size-8",
-        "icon-lg": "size-11",
+        default: "h-control px-3 py-2",
+        sm: "h-control-sm gap-1.5 px-3 text-metadata",
+        lg: "h-control-lg px-5 text-lg",
+        icon: "size-control",
+        "icon-sm": "size-control-sm",
+        "icon-lg": "size-control-lg",
       },
     },
     defaultVariants: {

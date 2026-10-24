@@ -6,7 +6,9 @@
  * actions only — the primary action never lives only inside a menu
  * (matrix §12 / UI Rule 19). Mechanics (Radix): arrows move, typeahead
  * works, Esc closes AND returns focus, Tab moves on without a trap
- * (matrix §30). Geometry (spec 142 F09): item rows are 44px, the panel is
+ * (matrix §30). Geometry (spec 142 F09): item rows are 36px (compact
+ * default density — spec 129 OD-4 as amended, Shahzeb 2026-10-24,
+ * superseding the F01 44px band), the panel is
  * bounded by the Radix available-height variable instead of a fixed
  * height, and the panel carries collision padding by default.
  */
@@ -69,7 +71,7 @@ function MenuItem({
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "relative flex min-h-11 cursor-default items-center gap-2 rounded-xs px-2 py-1.5 text-body outline-none select-none focus:bg-hover focus:text-ink data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-brand-rose data-[variant=destructive]:focus:bg-subtle [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4",
+        "relative flex min-h-9 cursor-default items-center gap-2 rounded-xs px-2 py-1.5 text-body outline-none select-none focus:bg-hover focus:text-ink data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-brand-rose data-[variant=destructive]:focus:bg-subtle [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4",
         className
       )}
       {...props}
@@ -87,7 +89,7 @@ function MenuCheckboxItem({
     <DropdownMenuPrimitive.CheckboxItem
       data-slot="menu-checkbox-item"
       className={cn(
-        "relative flex min-h-11 cursor-default items-center gap-2 rounded-xs py-1.5 pr-2 pl-8 text-body outline-none select-none focus:bg-hover focus:text-ink data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4",
+        "relative flex min-h-9 cursor-default items-center gap-2 rounded-xs py-1.5 pr-2 pl-8 text-body outline-none select-none focus:bg-hover focus:text-ink data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4",
         className
       )}
       checked={checked}
@@ -116,7 +118,7 @@ function MenuRadioItem({
     <DropdownMenuPrimitive.RadioItem
       data-slot="menu-radio-item"
       className={cn(
-        "relative flex min-h-11 cursor-default items-center gap-2 rounded-xs py-1.5 pr-2 pl-8 text-body outline-none select-none focus:bg-hover focus:text-ink data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-3",
+        "relative flex min-h-9 cursor-default items-center gap-2 rounded-xs py-1.5 pr-2 pl-8 text-body outline-none select-none focus:bg-hover focus:text-ink data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-3",
         className
       )}
       {...props}
@@ -181,7 +183,7 @@ function MenuSubTrigger({
       data-slot="menu-sub-trigger"
       data-inset={inset}
       className={cn(
-        "flex min-h-11 cursor-default items-center gap-2 rounded-xs px-2 py-1.5 text-body outline-none select-none focus:bg-hover focus:text-ink data-[inset]:pl-8 data-[state=open]:bg-hover [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+        "flex min-h-9 cursor-default items-center gap-2 rounded-xs px-2 py-1.5 text-body outline-none select-none focus:bg-hover focus:text-ink data-[inset]:pl-8 data-[state=open]:bg-hover [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
         className
       )}
       {...props}

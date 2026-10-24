@@ -3,7 +3,7 @@
  *
  * The full-page composer is exercised at the spec's phone/tablet widths
  * (320 / 390 / 768 CSS px): it must render with no horizontal overflow,
- * its primary actions must be at least 44px tall, and the submit action
+ * its primary actions are compact 36px tall (compact default density — Shahzeb 2026-10-24, spec 129 OD-4 as amended; supersedes the spec 142 F01 44px band), and the submit action
  * must be reachable without being hidden behind sticky chrome. Uses the
  * same intercepted fixture boundary as `composer-queue.spec.ts` — no
  * real backend, nothing reaches Facebook.
@@ -41,11 +41,11 @@ test.describe('composer — mobile gate (spec 142)', () => {
       });
       expect(overflow).toBeLessThanOrEqual(0);
 
-      // Primary actions are ≥44px tall (touch band, spec 142 F01).
+      // Primary actions are compact 36px tall.
       for (const testId of ['submit-post-composer-btn', 'cancel-post-composer-btn']) {
         const box = await composer.getByTestId(testId).boundingBox();
         expect(box, `${testId} has a bounding box`).not.toBeNull();
-        expect(box!.height).toBeGreaterThanOrEqual(44);
+        expect(box!.height).toBeGreaterThanOrEqual(36);
       }
 
       // The format + intent controls are reachable by tap (no hover-only

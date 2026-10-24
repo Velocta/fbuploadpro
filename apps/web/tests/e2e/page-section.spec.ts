@@ -127,7 +127,7 @@ test.describe('dedicated page section — mobile gate (spec 142)', () => {
       // Header intact: identity + primary action reachable by tap.
       await expect(page.getByTestId('header-add-queue-btn')).toBeVisible();
       const queueBtnBox = await page.getByTestId('header-add-queue-btn').boundingBox();
-      expect(queueBtnBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+      expect(queueBtnBox?.height ?? 0).toBeGreaterThanOrEqual(36);
 
       // Tab bar usable: every tab is reachable (scrollable strip) and
       // switching works at this width.
@@ -136,7 +136,7 @@ test.describe('dedicated page section — mobile gate (spec 142)', () => {
         timeout: 15_000,
       });
       const settingsTabBox = await page.getByTestId('tab-settings-btn').boundingBox();
-      expect(settingsTabBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+      expect(settingsTabBox?.height ?? 0).toBeGreaterThanOrEqual(36);
 
       await expectNoHorizontalOverflow(page);
     });
