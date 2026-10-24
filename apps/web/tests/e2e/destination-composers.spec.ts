@@ -159,6 +159,49 @@ test.describe('destination composer — Instagram (spec 132 PR-C3)', () => {
     expect(state.queue).toHaveLength(1);
   });
 
+  test('trial-reel strategy select stays inside its column at 320px', async ({ page }) => {
+    // Regression for the shared/ui Select width contract: the
+    // graduation-strategy trigger carries a long default label
+    // ("Automatic — graduates when it performs well") and no consumer
+    // width override. Before the primitive capped the trigger at its
+    // container, `w-fit` + `whitespace-nowrap` sized it to the
+    // unwrapped label and it pushed past the column (the same defect
+    // the YouTube/TikTok builds measured at 321px in a 320px
+    // viewport and patched locally with `w-full`).
+    const state = seededState();
+    await openDestination(page, state, []);
+    await page.setViewportSize({ width: 320, height: 900 });
+
+    await page.getByTestId('instagram-composer-open-btn').click();
+    await expect(page.getByTestId('instagram-composer')).toBeVisible();
+    // The trial-reel options (and their strategy select) exist only
+    // in the Reel format section.
+    await page.getByTestId('instagram-composer-format-reel').click();
+    await page.getByTestId('instagram-composer-trial-reel').click();
+
+    const trigger = page.getByTestId('instagram-composer-graduation-strategy');
+    await expect(trigger).toBeVisible();
+    const geometry = await trigger.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const parent = el.parentElement?.getBoundingClientRect();
+      const value = el.querySelector('[data-slot="select-value"]');
+      const valueRect = value?.getBoundingClientRect();
+      return {
+        width: r.width,
+        right: r.right,
+        parentWidth: parent?.width ?? 0,
+        parentRight: parent?.right ?? 0,
+        valueRight: valueRect?.right ?? 0,
+      };
+    });
+    expect(geometry.width).toBeLessThanOrEqual(geometry.parentWidth + 1);
+    expect(geometry.right).toBeLessThanOrEqual(geometry.parentRight + 1);
+    // The long label ellipsizes inside the trigger instead of
+    // spilling past its right edge.
+    expect(geometry.valueRight).toBeLessThanOrEqual(geometry.right + 1);
+    await expectNoHorizontalOverflow(page);
+  });
+
   for (const width of [320, 360, 390, 430, 768, 1024]) {
     test(`composer fits ${width}px with ≥44px primary targets`, async ({ page }) => {
       const state = seededState();

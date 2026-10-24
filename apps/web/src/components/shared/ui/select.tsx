@@ -19,6 +19,18 @@
  * events (proven by a browser hit-test in PR-133-3). Menus and
  * popovers keep the popover step; they are not Dialog inhabitants
  * in any current surface.
+ *
+ * Width contract: the trigger sizes to its content (`w-fit`, so
+ * toolbar selects stay intrinsic on wide layouts) but is capped at
+ * its container (`max-w-full` + `min-w-0`), and the value truncates
+ * with an ellipsis. Without the cap, `whitespace-nowrap` inflates
+ * the trigger's min-content size past narrow columns — a long
+ * placeholder measured 321px inside a 320px viewport during the
+ * spec 132 composer builds, which those surfaces patched locally
+ * with `w-full`. The cap belongs here, not per surface; a consumer
+ * may still force full width with `className="w-full"`. The value
+ * is styled from the trigger via descendant selectors because
+ * Radix's Select.Value swallows its own `className`.
  */
 import * as React from "react";
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
@@ -51,7 +63,7 @@ function SelectTrigger({
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "flex w-fit items-center justify-between gap-2 rounded-sm border border-line bg-canvas px-3 text-base whitespace-nowrap text-ink transition-colors duration-fast outline-none focus-visible:border-brand-gold disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-brand-rose data-[placeholder]:text-ink-dim data-[size=default]:h-11 data-[size=sm]:h-8 sm:text-body [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4",
+        "flex w-fit max-w-full min-w-0 items-center justify-between gap-2 rounded-sm border border-line bg-canvas px-3 text-base whitespace-nowrap text-ink transition-colors duration-fast outline-none focus-visible:border-brand-gold disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-brand-rose data-[placeholder]:text-ink-dim data-[size=default]:h-11 data-[size=sm]:h-8 sm:text-body [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4 [&>[data-slot=select-value]]:min-w-0 [&>[data-slot=select-value]]:truncate",
         className
       )}
       {...props}
