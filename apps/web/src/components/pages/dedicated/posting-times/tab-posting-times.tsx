@@ -42,7 +42,14 @@ const ScheduleTimezoneModal = dynamic(
 );
 
 export interface PageTabPostingTimesProps {
-  page: FacebookPageItem;
+  /**
+   * Only the timezone is read (the active-zone resolution below) — the
+   * prop is the Pick it always behaved as, so the unified destination
+   * panel (spec 134 PR-134-3) can drive this same orchestrator with a
+   * destination's timezone instead of a fabricated Page row. One
+   * posting-times implementation, two data adapters (spec §3.3).
+   */
+  page: Pick<FacebookPageItem, 'timezone'>;
   slots: PageSlotSummary[];
   isLoading?: boolean;
   pendingQueueCount?: number;

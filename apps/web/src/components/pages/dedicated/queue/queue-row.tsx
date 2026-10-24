@@ -32,6 +32,13 @@ export interface QueueRowProps {
   onDelete: (item: DedicatedQueueItem) => void;
   onRetry: (item: DedicatedQueueItem) => void;
   retryBlocked: boolean;
+  /** Why retry is blocked, stated under the button (spec 134 §3.5's
+   *  platform-named shape). Defaults to the Facebook wording this row
+   *  shipped with; the unified destination panel passes its platform's. */
+  retryBlockedReason?: string;
+  /** When set, Edit renders disabled-with-reason instead of firing
+   *  `onEdit` — the unified panel's per-platform edit gate (T27). */
+  editDisabledReason?: string | null;
   failedReason: string | null;
   busyAction: 'retry' | 'delete' | null;
   /** Position within the reorderable list (0-based) — drives edge states. */
@@ -115,6 +122,8 @@ export function QueueRow({
   onDelete,
   onRetry,
   retryBlocked,
+  retryBlockedReason = 'Reconnect your Facebook account to retry.',
+  editDisabledReason = null,
   failedReason,
   busyAction,
   reorderIndex,
@@ -257,9 +266,7 @@ export function QueueRow({
               <Button
                 variant="link"
                 size="sm"
-                {...(retryBlocked
-                  ? { disabledReason: 'Reconnect your Facebook account to retry.' }
-                  : {})}
+                {...(retryBlocked ? { disabledReason: retryBlockedReason } : {})}
                 disabled={actionsDisabled && !retryBlocked}
                 loading={busyAction === 'retry'}
                 aria-label={`Retry post for ${context}, due ${timeText}`}
@@ -268,21 +275,25 @@ export function QueueRow({
                 Retry
               </Button>
               {retryBlocked && (
-                <span className="text-metadata text-ink-sub">
-                  Reconnect your Facebook account to retry.
-                </span>
+                <span className="text-metadata text-ink-sub">{retryBlockedReason}</span>
               )}
             </span>
           )}
-          <Button
-            variant="link"
-            size="sm"
-            disabled={actionsDisabled}
-            aria-label={`Edit post for ${context}, due ${timeText}`}
-            onClick={() => onEdit(item)}
-          >
-            Edit
-          </Button>
+          <span className="inline-flex flex-col gap-0.5">
+            <Button
+              variant="link"
+              size="sm"
+              {...(editDisabledReason ? { disabledReason: editDisabledReason } : {})}
+              disabled={actionsDisabled && !editDisabledReason}
+              aria-label={`Edit post for ${context}, due ${timeText}`}
+              onClick={() => onEdit(item)}
+            >
+              Edit
+            </Button>
+            {editDisabledReason && (
+              <span className="text-metadata text-ink-sub">{editDisabledReason}</span>
+            )}
+          </span>
           {(bucket === 'queued' || bucket === 'scheduled') && (
             <Button
               variant="link"

@@ -7,6 +7,7 @@ import type { ComposerMediaItem } from './composer-media-area';
 import { formatSlotLong, formatSlotShort } from './queue-slot-utils';
 import {
   buildFacebookEnqueueRequest,
+  facebookFormatToUnifiedKind,
   resolveFacebookDestinationId,
   submitDestinationEnqueue,
 } from './destination-enqueue';
@@ -86,6 +87,14 @@ export async function submitCreatePost(input: CreatePostInput): Promise<string> 
 export interface EditPostInput {
   subdomain: string;
   itemId: string;
+  /**
+   * The unified destination the item belongs to, when the item is a
+   * unified queue item (its host panel resolved it). Set → the edit
+   * settles through the unified item actions (spec 134 PR-134-3);
+   * absent → the item is a legacy queue item and the legacy route
+   * below serves it, byte-identical to before.
+   */
+  destinationId?: string | null;
   format: PostFormat;
   caption: string;
   link: string;
@@ -99,15 +108,48 @@ export interface EditPostInput {
  * Updates a queue item in place and returns the toast message. A failed post
  * being edited is re-queued; switching to Post now dispatches it immediately.
  *
- * NOT retargeted by G4: the items this flow edits are legacy queue
- * items (the queue panel's read path is legacy until the Phase 7
- * cutover completes), and the unified backend ships no per-item
- * update or publish-now action — those are the unified queue
- * surfaces' actions (spec 134 PR-134-3 / Phase 7). Only the CREATE
- * path moved to the unified enqueue.
+ * Two data paths, chosen by the item itself: a UNIFIED item (its host
+ * passes `destinationId`) settles through the unified per-item actions
+ * (spec 134 PR-134-3 — the residual the G4 retarget recorded, now
+ * discharged: PATCH + publish-now under
+ * `/destinations/[destinationId]/queue/[itemId]`); a LEGACY item
+ * keeps the legacy route below, byte-identical, until Phase 7 removes
+ * it. The toast copy is the same on both paths.
  */
 export async function submitEditPost(input: EditPostInput): Promise<string> {
   const { subdomain, itemId, format, caption, link, intent } = input;
+
+  if (input.destinationId) {
+    const destinationId = input.destinationId;
+    const { kind, platformFormat } = facebookFormatToUnifiedKind(format);
+    const unifiedPayload: Record<string, unknown> = {
+      caption,
+      linkUrl: link.trim() || null,
+      kind,
+      platformFormat,
+    };
+    if (intent === 'schedule' && input.scheduleDate) {
+      unifiedPayload.scheduledTime = input.scheduleDate.toISOString();
+    } else if (intent === 'now') {
+      unifiedPayload.scheduledTime = new Date().toISOString();
+    }
+    if (input.wasFailed) unifiedPayload.status = 'queued';
+
+    const itemPath = buildTenantApiPath(
+      subdomain,
+      `/destinations/${destinationId}/queue/${itemId}`
+    );
+    await api.patch(itemPath, unifiedPayload, { schema: QueueMutationAckSchema });
+
+    if (intent === 'now') {
+      await api.post(`${itemPath}/publish-now`, undefined, {
+        schema: QueueMutationAckSchema,
+      });
+      return `Posted to ${input.pageName}.`;
+    }
+    return 'Post updated.';
+  }
+
   const payload: Record<string, unknown> = {
     caption,
     linkUrl: link.trim() || null,

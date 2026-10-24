@@ -118,7 +118,7 @@ describe('composer-submit — typed API client plumbing (spec 132 C1.4)', () => 
     );
   });
 
-  it('edit + Post now patches then calls publish-now (legacy item actions — not retargeted)', async () => {
+  it('edit + Post now patches then calls publish-now (a legacy item keeps the legacy route)', async () => {
     const urls: string[] = [];
     vi.stubGlobal(
       'fetch',
@@ -145,5 +145,50 @@ describe('composer-submit — typed API client plumbing (spec 132 C1.4)', () => 
       '/api/tenant/acme/publishing/queue/item-9',
       '/api/tenant/acme/publishing/queue/item-9/publish-now',
     ]);
+  });
+
+  it('edit on a unified item settles through the unified item actions (spec 134 PR-134-3)', async () => {
+    const calls: Array<{ url: string; method: string; body?: Record<string, unknown> }> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({
+          url: String(input),
+          method: init?.method ?? 'GET',
+          ...(init?.body
+            ? { body: JSON.parse(String(init.body)) as Record<string, unknown> }
+            : {}),
+        });
+        return jsonResponse({ success: true });
+      })
+    );
+
+    const message = await submitEditPost({
+      subdomain: 'acme',
+      itemId: 'item-9',
+      destinationId: DESTINATION_ID,
+      format: 'reel',
+      caption: 'Edited reel',
+      link: '',
+      intent: 'now',
+      scheduleDate: null,
+      wasFailed: true,
+      pageName: 'Acme Page',
+    });
+
+    expect(message).toBe('Posted to Acme Page.');
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      `PATCH /api/tenant/acme/destinations/${DESTINATION_ID}/queue/item-9`,
+      `POST /api/tenant/acme/destinations/${DESTINATION_ID}/queue/item-9/publish-now`,
+    ]);
+    // The unified payload: kind + platformFormat pair (never the
+    // legacy postFormat), and the failed item requeues.
+    expect(calls[0]?.body).toMatchObject({
+      caption: 'Edited reel',
+      kind: 'video',
+      platformFormat: 'reel',
+      status: 'queued',
+    });
+    expect(calls[0]?.body).not.toHaveProperty('postFormat');
   });
 });

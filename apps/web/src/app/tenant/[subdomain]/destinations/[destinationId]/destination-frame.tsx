@@ -10,19 +10,22 @@
  * the direction is frame-first here, Facebook second.
  *
  * The frame mounts the four spec 128 slots (queue / composer /
- * posting-times / history) per spec §9.4. The slotted deliverables that
- * exist today (spec 134's queue panel + posting-times, spec 132's
- * Facebook composer) are Facebook-Page-shaped — they consume a Page row
- * and the Pages queue/slots APIs. For a unified destination each slot
- * renders its owner's own not-yet-available state (spec §4.2.1(c)) —
- * never a 131-invented substitute, never a fake control — until that
- * owner's deliverable mounts into it. The composer slot is spec 132's
- * T-G0 host: it carries the destination's identity (id + platform) as
- * data attributes so the platform composer sets mount into it without a
- * frame change. The X composer (spec 132 §4.5) and the Instagram
- * composer (PR-C3) mount here on the enabling backend (PRs 750/756:
- * destination enqueue + posting-slots read); the remaining platforms'
- * composers mount the same way as their sets land.
+ * posting-times / history) per spec §9.4. Spec 134 PR-134-3 landed
+ * the queue + posting-times slots on the unified data path: the
+ * destination enqueue endpoint and the destination posting-slots API
+ * exist (PRs 750/756), and PR-134-3 added the unified queue list +
+ * item actions + slots writes the panels settle through — so those
+ * two slots render the real per-destination panels (loaded via
+ * next/dynamic: the queue panel pulls the composer bundle, which the
+ * route's first-load budget cannot carry statically). The composer
+ * slot is spec 132's T-G0 host: it carries the destination's
+ * identity (id + platform) as data attributes so the platform
+ * composer sets mount into it without a frame change. The X composer
+ * (spec 132 §4.5) and the Instagram composer (PR-C3) mount here on
+ * the enabling backend; the remaining platforms' composers mount the
+ * same way as their sets land, and until then the slot renders its
+ * owner's own not-yet-available state (spec §4.2.1(c)) — never a
+ * 131-invented substitute, never a fake control.
  *
  * OD131-2 (History tab) is UNANSWERED: history mounts as a slot in
  * this frame with its existing state only — no tab is created or
@@ -36,9 +39,9 @@
  * `loadDestinationDetail` helper (spec §6.3).
  */
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
 import { useQuery } from '@tanstack/react-query';
 
 import { api, buildTenantApiPath, isApiError } from '@/lib/api';
@@ -267,7 +270,45 @@ function DestinationSlot({
   );
 }
 
-/** The four spec 128 slots, mounted in spec order (§9.4). */
+const DestinationQueuePanel = dynamic(
+  () =>
+    import('@/components/queue/destination-queue-panel').then((m) => ({
+      default: m.DestinationQueuePanel,
+    })),
+  {
+    loading: () => (
+      <div aria-busy="true" aria-label="Loading queue" className="flex flex-col gap-4">
+        <Skeleton className="h-14 w-full" />
+        <Skeleton className="h-14 w-full" />
+      </div>
+    ),
+  }
+);
+const DestinationPostingTimesPanel = dynamic(
+  () =>
+    import('@/components/queue/destination-posting-times-panel').then((m) => ({
+      default: m.DestinationPostingTimesPanel,
+    })),
+  {
+    loading: () => (
+      <div
+        aria-busy="true"
+        aria-label="Loading posting times"
+        className="flex flex-col gap-4"
+      >
+        <Skeleton className="h-14 w-full" />
+        <Skeleton className="h-14 w-full" />
+      </div>
+    ),
+  }
+);
+
+/** The four spec 128 slots, mounted in spec order (§9.4). Queue and
+ *  posting-times render spec 134 PR-134-3's unified panels (the named
+ *  interlock edit: import + panel JSX in the slot sections only); the
+ *  composer slot mounts spec 132's platform composers (Instagram, X)
+ *  and otherwise keeps its owner's not-yet-available state, as does
+ *  history. */
 export function DestinationSlots({
   subdomain,
   destination,
@@ -279,7 +320,11 @@ export function DestinationSlots({
         slot="queue"
         title="Queue"
         description="Posts scheduled for this destination will appear here once its queue is available."
-      />
+      >
+        <div className="mt-4">
+          <DestinationQueuePanel subdomain={subdomain} destination={destination} />
+        </div>
+      </DestinationSlot>
       <DestinationSlot
         destination={destination}
         slot="composer"
@@ -299,7 +344,14 @@ export function DestinationSlots({
         slot="posting-times"
         title="Posting times"
         description="Posting times for this destination will appear here once they are available."
-      />
+      >
+        <div className="mt-4">
+          <DestinationPostingTimesPanel
+            subdomain={subdomain}
+            destination={destination}
+          />
+        </div>
+      </DestinationSlot>
       <DestinationSlot
         destination={destination}
         slot="history"
