@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { resolvePublishLimitWindow } from '@fbuploadpro/contracts';
-import { formatLimitWindowLabel, getXLimitIndicator } from './x-limit-indicator';
+import { formatLimitWindowLabel } from '../destination/destination-limit';
+import { getXLimitIndicator } from './x-limit-indicator';
 
 describe('getXLimitIndicator (spec 132 §6 D5 — single source of truth)', () => {
   it('derives its numbers from the contracts limits config, never literals', () => {

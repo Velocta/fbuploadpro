@@ -108,17 +108,6 @@ export function computeXValidationError(context: XValidationContext): string | n
   return null;
 }
 
-export function xSubmitButtonLabel(intent: ComposerIntent): string {
-  switch (intent) {
-    case 'now':
-      return 'Post now';
-    case 'schedule':
-      return 'Schedule post';
-    case 'queue':
-      return 'Add to queue';
-  }
-}
-
 /** Poll option row cap, re-exported for the builder's add-option control. */
 export const X_MAX_POLL_OPTIONS = X_POLL_MAX_OPTIONS;
 

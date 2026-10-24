@@ -47,17 +47,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shared/ui/select';
-import { submitDestinationEnqueue } from '../destination-enqueue';
+import { buildXEnqueueRequest, submitXEnqueue, xPostKind } from '../destination-enqueue';
+import {
+  destinationQueueGoesOutLine,
+  getNextDestinationSlot,
+  toDestinationSlotViews,
+} from '../destination/destination-slots';
 import { formatSlotLong, formatSlotShort, parseDateTimeLocalValue } from '../queue-slot-utils';
+import { submitButtonLabel } from '../composer-validation';
 import { getXLimitIndicator } from './x-limit-indicator';
-import { buildXEnqueueRequest, xPostKind } from './x-destination-enqueue';
-import { nextXSlotOccurrence, xQueueGoesOutLine } from './x-slot-utils';
 import {
   X_COMPOSER_DEFAULT_VALUES,
   xComposerFormSchema,
   type XComposerFormValues,
 } from './x-composer-form-schema';
-import { computeXValidationError, resolveXInitialScheduleValue, xSubmitButtonLabel } from './x-composer-validation';
+import { computeXValidationError, resolveXInitialScheduleValue } from './x-composer-validation';
 import { getXMediaItemError, XMediaArea, type XMediaItem } from './x-media-area';
 import { XComposerText } from './x-composer-text';
 import { hasRecentDuplicateXText } from './x-duplicate-warning';
@@ -140,28 +144,29 @@ export function XComposer({ subdomain, destination, onSubmitted }: Readonly<XCom
   );
 
   const timezone = slotsQuery.data?.timezone ?? destination.timezone;
-  const activeSlots = useMemo(
-    () => (slotsQuery.data?.slots ?? []).filter((slot) => slot.isActive),
+  const slotViews = useMemo(
+    () => (slotsQuery.data ? toDestinationSlotViews(slotsQuery.data) : []),
     [slotsQuery.data]
   );
+  const hasActiveSlots = slotViews.some((slot) => slot.isActive);
   const kind = xPostKind(item);
   const nextSlot = useMemo(
-    () => nextXSlotOccurrence(activeSlots, timezone, kind),
-    [activeSlots, timezone, kind]
+    () => getNextDestinationSlot(slotViews, kind),
+    [slotViews, kind]
   );
 
   const queueSlotsState: XQueueSlotsState = slotsQuery.isPending
     ? 'loading'
     : slotsQuery.isError
       ? 'error'
-      : activeSlots.length === 0
+      : !hasActiveSlots
         ? 'no-slots'
         : nextSlot === null
           ? 'no-covering'
           : 'ready';
   const queueDisabled =
     queueSlotsState === 'loading' || queueSlotsState === 'error' || queueSlotsState === 'no-slots';
-  const queueLine = nextSlot ? xQueueGoesOutLine(nextSlot.occurrence, timezone) : null;
+  const queueLine = nextSlot ? destinationQueueGoesOutLine(null, nextSlot.occurrence, timezone) : null;
 
   // Safest-intent fallback: the default is queue, but a destination
   // with no usable posting times starts on "Post now" instead (the
@@ -199,7 +204,7 @@ export function XComposer({ subdomain, destination, onSubmitted }: Readonly<XCom
     pollDurationMinutes,
     intent,
     isScheduleInFuture,
-    hasActiveSlots: activeSlots.length > 0,
+    hasActiveSlots,
     hasCoveringSlot: nextSlot !== null,
   });
   const isSubmitDisabled = isSubmitting || validationError !== null;
@@ -231,7 +236,7 @@ export function XComposer({ subdomain, destination, onSubmitted }: Readonly<XCom
         altText: submitted.altText,
         poll: pollEnabled ? { options: pollOptions, durationMinutes: pollDurationMinutes } : null,
       });
-      await submitDestinationEnqueue(subdomain, request);
+      await submitXEnqueue(subdomain, request);
       const message =
         submitted.intent === 'now'
           ? `Posted to ${destination.name}.`
@@ -467,7 +472,7 @@ export function XComposer({ subdomain, destination, onSubmitted }: Readonly<XCom
             error={serverError}
             isSubmitDisabled={isSubmitDisabled}
             isSubmitting={isSubmitting}
-            submitLabel={xSubmitButtonLabel(intent)}
+            submitLabel={submitButtonLabel(false, intent)}
           />
         </form>
       </Form>

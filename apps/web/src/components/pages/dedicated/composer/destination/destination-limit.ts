@@ -22,7 +22,14 @@ const PLATFORM_NAMES: Record<LimitedPlatform, string> = {
   threads: 'Threads',
 };
 
-function humaniseWindow(windowSeconds: number): string {
+/**
+ * Plain-language window label — "900" -> "15 minutes"; "3600" -> "1
+ * hour"; "86400" -> "24 hours". The one implementation every
+ * destination composer's limit indicator renders through (the X set's
+ * structured indicator included), so window wording can never drift
+ * between platforms.
+ */
+export function formatLimitWindowLabel(windowSeconds: number): string {
   if (windowSeconds % 86_400 === 0) {
     const days = windowSeconds / 86_400;
     return days === 1 ? '24 hours' : `${days} days`;
@@ -50,12 +57,12 @@ export function getDestinationLimitNote(platform: LimitedPlatform): string | nul
   const parts: string[] = [];
   if (limit.publishedPosts) {
     parts.push(
-      `up to ${limit.publishedPosts.maxCount} posts in ${humaniseWindow(limit.publishedPosts.windowSeconds)}`
+      `up to ${limit.publishedPosts.maxCount} posts in ${formatLimitWindowLabel(limit.publishedPosts.windowSeconds)}`
     );
   }
   if (limit.publishCalls) {
     parts.push(
-      `up to ${limit.publishCalls.maxCount} publishing actions in ${humaniseWindow(limit.publishCalls.windowSeconds)}`
+      `up to ${limit.publishCalls.maxCount} publishing actions in ${formatLimitWindowLabel(limit.publishCalls.windowSeconds)}`
     );
   }
   if (parts.length === 0) return null;

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { resolvePublishLimit } from '@fbuploadpro/contracts';
 import {
+  destinationQueueGoesOutLine,
   destinationSlotCoversFormat,
   getNextDestinationSlot,
   toDestinationSlotViews,
@@ -80,6 +81,22 @@ describe('destination slot coverage + next occurrence', () => {
     expect(
       getNextDestinationSlot([slot({ allowedFormats: ['story'] })], 'image')
     ).toBeNull();
+  });
+});
+
+describe('destinationQueueGoesOutLine', () => {
+  const occurrence = new Date('2026-10-24T09:00:00.000Z');
+
+  it('names the format when a label is given (Instagram / Threads form)', () => {
+    expect(destinationQueueGoesOutLine('Reels', occurrence, 'UTC')).toBe(
+      'Goes out at the next posting time for Reels: Sat 9:00 AM UTC.'
+    );
+  });
+
+  it('omits the format segment for a null label (the X form, spec 132 §4.5)', () => {
+    expect(destinationQueueGoesOutLine(null, occurrence, 'UTC')).toBe(
+      'Goes out at the next posting time: Sat 9:00 AM UTC.'
+    );
   });
 });
 
